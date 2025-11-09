@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    /* ----- 1. CONFIGURAÇÕES GERAIS ----- */
+    :root {
+      /* Cores base */
+      --cor-azul: #005a9c;
+      --cor-azul-leve: rgba(0, 90, 156, 0.1); /* 10% de opacidade */
+      --cor-rosa: #d63384;
+      --cor-rosa-leve: rgba(214, 51, 132, 0.1); /* 10% de opacidade */
+      
+      /* Cores dinâmicas (padrão azul) */
+      --cor-tema: var(--cor-azul);
+      --cor-tema-leve: var(--cor-azul-leve);
+
+      /* Cores estáticas */
+      --cor-fundo: #f4f7f6;
+      --cor-card: #ffffff;
+      --cor-texto: #333333;
+      --cor-texto-secundario: #555555;
+      --cor-borda: #e0e0e0;
+      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --border-radius: 12px;
+      
+      /* Cores de Análise */
+      --cor-abaixo: #ffc107; /* Amarelo */
+      --cor-normal: #28a745; /* Verde */
+      --cor-acima: #dc3545;  /* Vermelho */
+      --cor-abaixo-leve: #fff8e1;
+      --cor-normal-leve: #eaf6ec;
+      --cor-acima-leve: #fbebed;
+    }
+
+    /* Sobrescreve cores para menino */
+    body.masculino {
+      --cor-tema: var(--cor-azul);
+      --cor-tema-leve: var(--cor-azul-leve);
+    }
+
+    /* Sobrescreve cores para menina */
+    body.feminino {
+      --cor-tema: var(--cor-rosa);
+      --cor-tema-leve: var(--cor-rosa-leve);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: var(--cor-fundo);
+      margin: 0;
+      padding: 16px;
+      color: var(--cor-texto);
+      box-sizing: border-box;
+    }
+
+    /* ... (Estilos de Animação e Skeleton permanecem os mesmos) ... */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes skeleton-pulse {
+      0% { background-color: #e0e0e0; }
+      50% { background-color: #f0f0f0; }
+      100% { background-color: #e0e0e0; }
+    }
+    #loading-skeleton {
+      display: block;
+      background-color: var(--cor-card);
+      border-radius: var(--border-radius);
+      box-shadow: var(--sombra-card);
+      padding: 24px;
+      text-align: center;
+    }
+    .skeleton-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      margin: 0 auto 16px auto;
+    }
+    .skeleton-title {
+      width: 60%;
+      height: 24px;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 4px;
+      margin: 0 auto 12px auto;
+    }
+    .skeleton-line {
+      width: 80%;
+      height: 16px;
+      margin: 0 auto 8px auto;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 4px;
+    }
+    .skeleton-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .skeleton-tab {
+      width: 30%; /* --- AJUSTADO para 3 abas --- */
+      height: 30px;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 15px;
+    }
+    #conteudo {
+      display: none;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    .profile-card {
+      background-color: var(--cor-card);
+      border-radius: var(--border-radius);
+      box-shadow: var(--sombra-card);
+      text-align: center;
+      padding: 24px;
+      overflow: hidden;
+    }
+    .profile-image-container {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      margin: 0 auto 16px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--cor-tema-leve);
+    }
+    .profile-image-container svg {
+      width: 44px;
+      height: 44px;
+    }
+    .icon-baby-boy,
+    .icon-baby-girl { 
+      fill: var(--cor-tema);
+    }
+    .icon-baby-unknown { fill: var(--cor-texto-secundario); }
+    #patient-name {
+      margin: 0 0 8px 0;
+      font-size: 1.5em;
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .patient-details-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 4px;
+      margin-bottom: 20px;
+    }
+    .detail-pill {
+      font-size: 0.75em;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background-color: var(--cor-fundo);
+      color: var(--cor-texto-secundario);
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .tab-navigation {
+      display: flex;
+      background-color: var(--cor-fundo);
+      border-radius: 20px;
+      padding: 4px;
+      margin-top: 16px;
+    }
+    .tab-button {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 0.9em;
+      font-weight: 600;
+      color: var(--cor-texto-secundario);
+      background-color: transparent;
+      border: none;
+      border-radius: 18px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, color 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tab-button:hover {
+      background-color: #e9ecef;
+    }
+    .tab-button.active {
+      background-color: var(--cor-card);
+      color: var(--cor-tema);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .tab-button.active svg {
+      fill: var(--cor-tema);
+    }
+
+    /* ----- 5. NOVOS ESTILOS PARA GRÁFICOS ----- */
+    .chart-container {
+      position: relative;
+      height: 200px;
+      width: 100%;
+      margin-top: 16px; /* Espaço acima do gráfico */
+      padding: 10px;
+      background-color: #fdfdfd; /* Fundo levemente diferente */
+      border: 1px solid var(--cor-borda);
+      border-radius: var(--border-radius);
+      box-sizing: border-box; /* Garante que padding não estoure */
+    }
+
+    .table-title {
+      font-size: 0.9em;
+      font-weight: 600;
+      color: var(--cor-texto-secundario);
+      text-align: left;
+      margin-top: 20px; /* Espaço entre gráfico e título */
+      margin-bottom: 8px;
+      padding-left: 5px;
+    }
+
+    .tab-content-container {
+      margin-top: -1px;
+    }
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* ----- 6. ESTILOS DE TABELA (sem mudança) ----- */
+    .table-container {
+      max-height: 250px;
+      overflow-y: auto;
+      padding: 0;
+      /* margin-top: 16px; */ /* Removido, agora controlado pelo .table-title */
+      border: 1px solid var(--cor-borda);
+      border-radius: var(--border-radius);
+    }
+    .styled-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85em;
+    }
+    .styled-table th,
+    .styled-table td {
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--cor-borda);
+    }
+    .styled-table th {
+      background-color: #f8f9fa;
+      font-weight: 600;
+      color: var(--cor-texto-secundario);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .styled-table tbody tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    .styled-table tbody tr:hover {
+      background-color: #e9ecef;
+    }
+    .styled-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    /* --- NOVOS ESTILOS DE ANÁLISE --- */
+    .analysis-pill {
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.9em;
+      text-transform: uppercase;
+    }
+    .analysis-pill.Abaixo {
+      background-color: var(--cor-abaixo-leve);
+      color: var(--cor-abaixo);
+    }
+    .analysis-pill.Acima {
+      background-color: var(--cor-acima-leve);
+      color: var(--cor-acima);
+    }
+    .analysis-pill.Normal {
+      background-color: var(--cor-normal-leve);
+      color: var(--cor-normal);
+    }
+    .analysis-pill.default {
+      background-color: var(--cor-fundo);
+      color: var(--cor-texto-secundario);
+    }
+    /* --- FIM DOS NOVOS ESTILOS --- */
+    
+    .empty-state, #error {
+      padding: 20px;
+      text-align: center;
+      color: var(--cor-texto-secundario);
+      font-style: italic;
+      font-size: 0.9em;
+    }
+    #error {
+      color: #d9534f;
+      font-weight: bold;
+      display: none;
+      background-color: #f8d7da;
+      border: 1px solid #f5c6cb;
+      border-radius: var(--border-radius);
+      margin: 10px 0;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    
+    .data-card-header h4 {
+      margin: 0;
+      font-size: 1.0em;
+      font-weight: 600;
+      color: var(--cor-tema);
+    }
+  </style>
+</head>
+<body>
+
+  <svg width="0" height="0" style="display:none;">
+    <defs>
+      <symbol id="icon-baby-boy" viewBox="0 0 24 24">
+        <path class="icon-baby-boy" d="M12 2c-4.42 0-8 3.58-8 8 0 4.41 3.58 8 8 8s8-3.59 8-8c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm-2.5-5c.83 0 1.5-.67 1.5-1.5S10.33 8 9.5 8 8 8.67 8 9.5s.67 1.5 1.5 1.5zm5 0c.83 0 1.5-.67 1.5-1.5S15.33 8 14.5 8s-1.5.67-1.5 1.5.67 1.5 1.5 1.5zm-2.5 3c-1.48 0-2.75-.81-3.45-2H15.45c-.7 1.19-1.97 2-3.45 2zM5 20v2h14v-2c0-2.66-5.33-4-7-4s-7 1.34-7 4z"/>
+      </symbol>
+      <symbol id="icon-baby-girl" viewBox="0 0 24 24">
+        <path class="icon-baby-girl" d="M12 2c-4.42 0-8 3.58-8 8 0 4.41 3.58 8 8 8s8-3.59 8-8c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm-2.5-5c.83 0 1.5-.67 1.5-1.5S10.33 8 9.5 8 8 8.67 8 9.5s.67 1.5 1.5 1.5zm5 0c.83 0 1.5-.67 1.5-1.5S15.33 8 14.5 8s-1.5.67-1.5 1.5.67 1.5 1.5 1.5zm-2.5 3c-1.48 0-2.75-.81-3.45-2H15.45c-.7 1.19-1.97 2-3.45 2zM5 20v2h14v-2c0-2.66-5.33-4-7-4s-7 1.34-7 4z"/>
+        <path class="icon-baby-girl" d="M17.5 4.5c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zM8.5 4.5c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/>
+      </symbol>
+       <symbol id="icon-baby-unknown" viewBox="0 0 24 24">
+        <path class="icon-baby-unknown" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+      </symbol>
+      <symbol id="icon-exame" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M10.5 15c.69 0 1.32-.31 1.76-.84l5.6-7.46c.33-.44.25-1.07-.19-1.4c-.44-.33-1.07-.25-1.4.19l-4.88 6.51l-2.09-2.79c-.33-.44-1-.5-1.44-.17c-.44.33-.5.96-.17 1.4L9.38 14.5c.34.46.88.5 1.12.5zM6 16H4c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h11c1.1 0 2 .9 2 2v3h-2V4H4v10h2V16zm14 2.5c0 .28-.22.5-.5.5h-5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5h5c.28 0 .5.22.5.5zm0-3c0 .28-.22.5-.5.5h-5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5h5c.28 0 .5.22.5.5zm-2-3c0 .28-.22.5-.5.5h-2.5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5h2.5c.28 0 .5.22.5.5zM21 9h-7c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h7c.55 0 1-.45 1-1V10c0-.55-.45-1-1-1z"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div id="loading-skeleton">
+    <div class="skeleton-image"></div>
+    <div class="skeleton-title"></div>
+    <div class="skeleton-line"></div>
+    <div class="skeleton-tabs">
+      <div class="skeleton-tab"></div>
+      <div class="skeleton-tab"></div>
+      <div class="skeleton-tab"></div> </div>
+  </div>
+
+  <div id="conteudo">
+    <div class="profile-card">
+      
+      <div id="profile-image" class="profile-image-container">
+        </div> 
+      
+      <h3 id="patient-name">Nome do Paciente</h3> 
+      
+      <div id="patient-details" class="patient-details-container">
+        </div>
+    
+      <div class="tab-navigation">
+        <button id="btn-doses" class="tab-button active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 8h-3V6c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6h6v2H9V6zm11 14H4V10h16v10z"/><path d="M11 14h2v3h3v2h-3v3h-2v-3H8v-2h3z"/></svg>
+          Doses
+        </button>
+        <button id="btn-peso" class="tab-button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.96 0-9 4.04-9 9s4.04 9 9 9 9-4.04 9-9-4.04-9-9-9zm0 16c-3.86 0-7-3.14-7-7s3.14-7 7-7 7 3.14 7 7-3.14 7-7 7z"/><path d="M11.5 11.6c.71-.2 1.4-.4 2-.6.6-.2 1.1-.5 1.5-.8.5-.3.8-.7.8-1.2 0-.6-.3-1-.9-1.3-.6-.3-1.3-.5-2.2-.5-1.1 0-2 .2-2.8.6-.8.4-1.4 1-1.7 1.7l1.7.7c.2-.4.5-.7.9-1 .4-.2.8-.3 1.3-.3.5 0 .9.1 1.2.2.3.1.5.4.5.7 0 .3-.1.5-.4.7-.3.2-.6.3-1 .4-.7.2-1.4.4-2.1.6-.7.2-1.3.5-1.8.8-.5.3-.7.8-.7 1.4 0 .6.3 1.1.8 1.4.5.3 1.2.5 2.1.5 1 0 1.9-.2 2.6-.5.7-.3 1.3-.8 1.7-1.4l-1.7-.7c-.3.4-.6.7-1 .9-.4.2-.9.3-1.4.3-.5 0-1-.1-1.3-.3-.3-.2-.5-.4-.5-.8 0-.3.2-.6.5-.8.3-.2.7-.4 1.1-.5z"/></svg>
+          Peso
+        </button>
+        <button id="btn-exames" class="tab-button">
+          <svg width="16" height="16" viewBox="0 0 24 24"><use xlink:href="#icon-exame"></use></svg>
+          Exames
+        </button>
+      </div>
+
+    </div>
+
+    <div class="tab-content-container">
+      <div id="error"></div>
+      
+      <div id="historico-doses" class="tab-content active">
+        <div class="chart-container" id="container-chart-doses">
+          <canvas id="chart-doses"></canvas>
+        </div>
+        <h4 class="table-title">Histórico Detalhado de Doses</h4>
+        <div id="tabela-doses-container">
+          </div>
+      </div>
+
+      <div id="historico-pesos" class="tab-content">
+        <div class="chart-container" id="container-chart-peso">
+          <canvas id="chart-peso"></canvas>
+        </div>
+        <h4 class="table-title">Histórico Detalhado de Peso</h4>
+        <div id="tabela-pesos-container">
+          </div>
+      </div>
+      
+      <div id="historico-exames" class="tab-content">
+        <h4 class="table-title">Histórico de Exames</h4>
+        <div id="tabela-exames-container">
+          </div>
+      </div>
+      
+    </div>
+  </div>
+
+
+  <script>
+    // Variáveis globais para armazenar as instâncias dos gráficos
+    // Isso é necessário para destruí-los antes de recarregar os dados
+    let globalChartPeso = null;
+    let globalChartDoses = null;
+  
+    // Roda esta função assim que a sidebar carregar
+    window.addEventListener('load', function() {
+      // Esconde conteúdo e mostra skeleton
+      document.getElementById('conteudo').style.display = 'none';
+      document.getElementById('error').style.display = 'none';
+      document.getElementById('loading-skeleton').style.display = 'block';
+
+      // Chama a função do Apps Script
+      google.script.run
+        .withSuccessHandler(comSucesso)
+        .withFailureHandler(comErro)
+        .buscarDadosPacienteSelecionado();
+
+      // Configura os botões das abas
+      const btnDoses = document.getElementById('btn-doses');
+      const btnPeso = document.getElementById('btn-peso');
+      const btnExames = document.getElementById('btn-exames'); // NOVO
+      
+      const contentDoses = document.getElementById('historico-doses');
+      const contentPeso = document.getElementById('historico-pesos');
+      const contentExames = document.getElementById('historico-exames'); // NOVO
+
+      btnDoses.addEventListener('click', function() {
+        btnDoses.classList.add('active');
+        btnPeso.classList.remove('active');
+        btnExames.classList.remove('active'); // NOVO
+        
+        contentDoses.classList.add('active');
+        contentPeso.classList.remove('active');
+        contentExames.classList.remove('active'); // NOVO
+      });
+
+      btnPeso.addEventListener('click', function() {
+        btnDoses.classList.remove('active');
+        btnPeso.classList.add('active');
+        btnExames.classList.remove('active'); // NOVO
+        
+        contentDoses.classList.remove('active');
+        contentPeso.classList.add('active');
+        contentExames.classList.remove('active'); // NOVO
+      });
+      
+      // NOVO EVENT LISTENER
+      btnExames.addEventListener('click', function() {
+        btnDoses.classList.remove('active');
+        btnPeso.classList.remove('active');
+        btnExames.classList.add('active');
+        
+        contentDoses.classList.remove('active');
+        contentPeso.classList.remove('active');
+        contentExames.classList.add('active');
+      });
+    });
+
+    // Função chamada se 'buscarDadosPacienteSelecionado' funcionar
+    function comSucesso(dados) {
+      document.getElementById('loading-skeleton').style.display = 'none'; // Esconde o skeleton
+
+      if (dados.error) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').innerText = dados.error;
+        return;
+      }
+
+      // Mostra o conteúdo principal com animação
+      document.getElementById('conteudo').style.display = 'block';
+      
+      const profileImage = document.getElementById('profile-image');
+      
+      document.getElementById('patient-name').innerText = dados.nome || "Nome não encontrado"; 
+
+      let babyIconId = 'icon-baby-unknown';
+      // Limpa classes do body
+      document.body.classList.remove('masculino', 'feminino');
+
+      // Define as cores do tema com base no sexo
+      let corTema = getComputedStyle(document.documentElement).getPropertyValue('--cor-azul');
+      let corTemaLeve = getComputedStyle(document.documentElement).getPropertyValue('--cor-azul-leve');
+
+      const sexo = String(dados.sexo || '').toUpperCase();
+      if (sexo === 'MASCULINO') {
+        document.body.classList.add('masculino'); // Adiciona classe ao BODY
+        babyIconId = 'icon-baby-boy';
+      } else if (sexo === 'FEMININO') {
+        document.body.classList.add('feminino'); // Adiciona classe ao BODY
+        babyIconId = 'icon-baby-girl';
+        // Pega os valores das variáveis CSS rosa
+        corTema = getComputedStyle(document.documentElement).getPropertyValue('--cor-rosa');
+        corTemaLeve = getComputedStyle(document.documentElement).getPropertyValue('--cor-rosa-leve');
+      }
+      
+      profileImage.innerHTML = `<svg><use xlink:href="#${babyIconId}"></use></svg>`; 
+
+      // Preenche os detalhes (Prontuário, Sexo, Classificação)
+      const detailsContainer = document.getElementById('patient-details');
+      detailsContainer.innerHTML = ''; // Limpa detalhes anteriores
+      
+      if (dados.prontuario) {
+        detailsContainer.innerHTML += `<span class="detail-pill">Prontuário: ${dados.prontuario}</span>`;
+      }
+      if (dados.classificacao && dados.classificacao !== 'N/D') {
+        const classificacaoLimpa = dados.classificacao.replace(/^\d\.\s*/, '');
+        detailsContainer.innerHTML += `<span class="detail-pill">${classificacaoLimpa}</span>`;
+      }
+      
+      // --- PREENCHIMENTO DAS TABELAS ---
+
+      // Preenche tabela de Doses
+      const dosesDiv = document.getElementById('tabela-doses-container');
+      if (dados.historicoDoses && dados.historicoDoses.length > 0) {
+        let tabelaDoses = '<div class="table-container"><table class="styled-table"><thead><tr><th>Data</th><th>Dose (mg)</th><th>Taxa (mg/kg)</th></tr></thead><tbody>';
+        dados.historicoDoses.forEach(function(dose) {
+          const doseFormatada = (dose.dose !== null && dose.dose !== undefined) ? Number(dose.dose).toLocaleString('pt-BR') : 'N/A';
+          const taxaFormatada = (dose.taxa !== null && dose.taxa !== undefined) ? Number(dose.taxa).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'N/A';
+          tabelaDoses += '<tr><td>' + dose.data + '</td><td>' + doseFormatada + '</td><td>' + taxaFormatada + '</td></tr>';
+        });
+        dosesDiv.innerHTML = tabelaDoses + '</tbody></table></div>';
+      } else {
+        dosesDiv.innerHTML = '<p class="empty-state">Nenhum registro de dose encontrado.</p>';
+      }
+
+      // Preenche tabela de Pesos
+      const pesosDiv = document.getElementById('tabela-pesos-container');
+      if (dados.historicoPesos && dados.historicoPesos.length > 0) {
+        let tabelaPesos = '<div class="table-container"><table class="styled-table"><thead><tr><th>Data</th><th>Peso (kg)</th></tr></thead><tbody>';
+        dados.historicoPesos.forEach(function(peso) {
+          const pesoFormatado = (peso.peso && peso.peso > 0) ? peso.peso.toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3}) : 'N/D';
+          tabelaPesos += '<tr><td>' + peso.data + '</td><td>' + pesoFormatado + '</td></tr>';
+        });
+        pesosDiv.innerHTML = tabelaPesos + '</tbody></table></div>';
+      } else {
+        pesosDiv.innerHTML = '<p class="empty-state">Nenhum registro de peso encontrado.</p>';
+      }
+
+      // --- NOVO BLOCO: Preenche tabela de Exames ---
+      const examesDiv = document.getElementById('tabela-exames-container');
+      if (dados.historicoExames && dados.historicoExames.length > 0) {
+        let tabelaExames = '<div class="table-container"><table class="styled-table"><thead><tr><th>Data</th><th>Exame</th><th>Resultado</th><th>Análise</th></tr></thead><tbody>';
+        dados.historicoExames.forEach(function(exame) {
+          
+          // Formata o valor do resultado se for número
+          let valorFormatado = exame.valor;
+          if (typeof exame.valor === 'number') {
+            valorFormatado = exame.valor.toLocaleString('pt-BR', {maximumFractionDigits: 2});
+          }
+          
+          // Aplica classe de cor na pílula de análise
+          let classeAnalise = 'default';
+          if (exame.analise === 'Abaixo' || exame.analise === 'Acima' || exame.analise === 'Normal') {
+            classeAnalise = exame.analise;
+          }
+
+          tabelaExames += '<tr>' +
+            '<td>' + exame.data + '</td>' +
+            '<td>' + exame.nome + '</td>' +
+            '<td>' + valorFormatado + '</td>' +
+            '<td><span class="analysis-pill ' + classeAnalise + '">' + exame.analise + '</span></td>' +
+          '</tr>';
+        });
+        examesDiv.innerHTML = tabelaExames + '</tbody></table></div>';
+      } else {
+        examesDiv.innerHTML = '<p class="empty-state">Nenhum registro de exame encontrado.</p>';
+      }
+
+
+      // --- 4. RENDERIZAÇÃO DOS GRÁFICOS ---
+      // Passa os dados e as cores do tema para as funções de renderização
+      renderizarGraficoPeso(dados.historicoPesos, corTema, corTemaLeve);
+      renderizarGraficoDoses(dados.historicoDoses, corTema, corTemaLeve);
+    }
+
+    // Função chamada se 'buscarDadosPacienteSelecionado' falhar
+    function comErro(err) {
+      document.getElementById('loading-skeleton').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').innerText = 'Erro ao carregar dados: ' + err.message;
+    }
+
+    /**
+     * Renderiza o gráfico de evolução de peso.
+     * @param {Array} historicoPesos - Array de objetos {data, peso}
+     * @param {string} corTema - Cor principal (hex ou var)
+     *... (O resto das funções 'renderizarGraficoPeso' e 'renderizarGraficoDoses' permanece o mesmo) ...
+    */
+    function renderizarGraficoPeso(historicoPesos, corTema, corTemaLeve) {
+      if (globalChartPeso) {
+        globalChartPeso.destroy(); // Destrói gráfico anterior, se houver
+      }
+      
+      const container = document.getElementById('container-chart-peso');
+      if (!historicoPesos || historicoPesos.length < 2) {
+        container.style.display = 'none'; // Esconde se não houver dados suficientes
+        return;
+      }
+      container.style.display = 'block';
+
+      // Filtra dados válidos e mapeia para os arrays do gráfico
+      const dadosValidos = historicoPesos.filter(p => p.peso !== null && p.peso > 0);
+      const labels = dadosValidos.map(p => p.data);
+      const data = dadosValidos.map(p => p.peso);
+
+      if (data.length < 2) {
+         container.style.display = 'none'; // Esconde se não houver dados suficientes
+         return;
+      }
+
+      const ctx = document.getElementById('chart-peso').getContext('2d');
+      globalChartPeso = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Peso (kg)',
+            data: data,
+            borderColor: corTema,
+            backgroundColor: corTemaLeve,
+            fill: true,
+            tension: 0.1, // Linha levemente curvada
+            pointBackgroundColor: corTema,
+            pointRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: false, // Não começar do zero para peso
+              title: { display: true, text: 'Peso (kg)' }
+            },
+            x: {
+              title: { display: true, text: 'Data' }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * Renderiza o gráfico de evolução da taxa mg/kg.
+     * @param {Array} historicoDoses - Array de objetos {data, taxa}
+     * @param {string} corTema - Cor principal (hex ou var)
+     * @param {string} corTemaLeve - Cor de fundo (hex ou var)
+     */
+    function renderizarGraficoDoses(historicoDoses, corTema, corTemaLeve) {
+      if (globalChartDoses) {
+        globalChartDoses.destroy(); // Destrói gráfico anterior, se houver
+      }
+
+      const container = document.getElementById('container-chart-doses');
+      if (!historicoDoses || historicoDoses.length < 1) {
+         container.style.display = 'none'; // Esconde se não houver dados
+         return;
+      }
+      container.style.display = 'block';
+
+      // Filtra dados válidos e mapeia
+      const dadosValidos = historicoDoses.filter(d => d.taxa !== null && d.taxa !== undefined && !isNaN(Number(d.taxa)));
+      const labels = dadosValidos.map(d => d.data);
+      const data = dadosValidos.map(d => Number(d.taxa));
+      
+      if (data.length < 1) {
+         container.style.display = 'none'; // Esconde se não houver dados
+         return;
+      }
+
+      const ctx = document.getElementById('chart-doses').getContext('2d');
+      globalChartDoses = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Taxa (mg/kg)',
+            data: data,
+            borderColor: corTema,
+            backgroundColor: corTemaLeve,
+            fill: true,
+            stepped: true, // "Degrau", pois a taxa é constante até a próxima mudança
+            pointBackgroundColor: corTema,
+            pointRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true, // Taxa pode começar do zero
+              title: { display: true, text: 'Taxa (mg/kg)' }
+            },
+            x: {
+              title: { display: true, text: 'Data' }
+            }
+          }
+        }
+      });
+    }
+
+  </script>
+</body>
+</html>

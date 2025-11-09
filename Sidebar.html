@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/styles.css">
+  </head>
+  <body>
+    <h3>Controle de Módulos</h3>
+    <p>Selecione as ações que deseja executar:</p>
+    
+    <div class="block">
+      <input type="checkbox" id="chkFormatar">
+      <label for="chkFormatar">Aplicar Formatação de Cabeçalho</label>
+    </div>
+    
+    <div class="block">
+      <input type="checkbox" id="chkProteger">
+      <label for="chkProteger">Proteger Aba Atual</label>
+    </div>
+
+    <br>
+    
+    <div class="block">
+      <button class="action" onclick="executarFuncoes()">Executar Selecionados</button>
+    </div>
+
+    <script>
+      function executarFuncoes() {
+        // 1. Cria um objeto para guardar as escolhas do usuário
+        var opcoesDoUsuario = {
+          formatar: document.getElementById('chkFormatar').checked,
+          proteger: document.getElementById('chkProteger').checked
+        };
+
+        // 2. Esta é a "Ponte":
+        // Chama a função 'executarSelecao' que está no Code.gs
+        // e passa o objeto 'opcoesDoUsuario' como argumento.
+        google.script.run
+            .withSuccessHandler(fecharSidebar) // (Opcional) O que fazer se der certo
+            .withFailureHandler(mostrarErro) // (Opcional) O que fazer se der erro
+            .executarSelecao(opcoesDoUsuario);
+      }
+
+      function fecharSidebar() {
+        console.log("Comandos enviados.");
+        // (Opcional) Fecha a sidebar após o sucesso
+        // google.script.host.close(); 
+      }
+
+      function mostrarErro(erro) {
+        alert("Ocorreu um erro: " + erro.message);
+      }
+    </script>
+  </body>
+</html>

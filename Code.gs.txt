@@ -1,0 +1,52 @@
+// Função que cria e mostra a sidebar
+function mostrarSidebar() {
+  // Cria a interface a partir do arquivo 'Sidebar.html' (que vamos criar)
+  var html = HtmlService.createHtmlOutputFromFile('Sidebar')
+      .setTitle('Painel de Controle');
+  
+  // Manda a interface do Google Sheets mostrar a sidebar
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+// ---------------------------------------------------
+// NOSSOS "MÓDULOS" (As funções que o usuário vai escolher)
+// ---------------------------------------------------
+
+/**
+ * Função "mestra" que recebe as escolhas da sidebar
+ * e decide quais funções chamar.
+ */
+function executarSelecao(opcoes) {
+  var planilha = SpreadsheetApp.getActiveSpreadsheet();
+
+  // O objeto 'opcoes' vem do HTML (veremos no Passo 2)
+  if (opcoes.formatar) {
+    modulo_AplicarFormatacao(planilha);
+  }
+  
+  if (opcoes.proteger) {
+    modulo_ProtegerAbas(planilha);
+  }
+
+  // Feedback para o usuário
+  planilha.toast('Tarefas selecionadas foram executadas!', 'Concluído');
+}
+
+
+// --- Funções "módulo" individuais ---
+
+function modulo_AplicarFormatacao(planilha) {
+  var aba = planilha.getActiveSheet();
+  aba.getRange("A1:C1").setBackground("#4a86e8").setFontColor("white").setFontWeight("bold");
+  // ... (mais lógica de formatação)
+}
+
+function modulo_ProtegerAbas(planilha) {
+  var aba = planilha.getActiveSheet();
+  var protecao = aba.protect().setDescription('Aba protegida por script');
+  
+  // Remove você mesmo das permissões para testar (cuidado!)
+  // var eu = Session.getEffectiveUser();
+  // protecao.removeEditor(eu);
+  // ... (mais lógica de proteção)
+}

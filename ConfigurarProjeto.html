@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --cor-primaria: #005a9c;
+      --cor-primaria-hover: #004a80;
+      --cor-verde-escuro-titulo: #00573D;
+      --cor-fundo-app: #f4f7f6;
+      --cor-fundo-card: #ffffff;
+      --cor-borda: #e0e0e0;
+      --cor-texto-titulo: #1f1f1f;
+      --cor-texto-corpo: #444;
+      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --border-radius: 8px;
+    }
+    body, html {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: var(--cor-fundo-app);
+      color: var(--cor-texto-corpo);
+      margin: 0; padding: 32px;
+      line-height: 1.6;
+    }
+    .card {
+      background-color: var(--cor-fundo-card);
+      padding: 24px 32px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--sombra-card);
+    }
+    h3 {
+      font-size: 1.9em; font-weight: 700;
+      color: var(--cor-verde-escuro-titulo);
+      margin: 0 0 4px 0; text-align: center;
+    }
+    p { font-size: 1em; margin-top: 0; }
+    
+    .modulo-box {
+      border: 1px solid var(--cor-borda);
+      border-radius: var(--border-radius);
+      margin-bottom: 15px;
+      padding: 10px 20px;
+      transition: background-color 0.2s ease;
+    }
+    .modulo-box label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .modulo-box input[type="checkbox"] {
+      transform: scale(1.3);
+      margin-right: 15px;
+      accent-color: var(--cor-primaria);
+    }
+    .modulo-info h4 {
+      font-size: 1.1em;
+      color: var(--cor-texto-titulo);
+      margin: 0 0 5px 0;
+    }
+    .modulo-info p {
+      font-size: 0.9em;
+      margin: 0;
+    }
+    
+    button.action {
+      font-size: 1.1em; font-weight: bold; color: #fff;
+      background-color: var(--cor-primaria);
+      border: none; padding: 14px 28px; border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    button.action:hover {
+      background-color: var(--cor-primaria-hover);
+    }
+    
+    #loading, #error { margin-top: 15px; display: none; }
+    #error { color: #dc3545; font-weight: bold; }
+  </style>
+</head>
+<body>
+  
+  <div class="card">
+    <h3>Assistente de Configuração</h3>
+    <p>Selecione os módulos que você pretende usar neste estudo. O script irá importar as regras do DB Mestre e criar as abas de entrada de dados necessárias.</p>
+
+    <div class="modulo-box">
+      <label>
+        <input type="checkbox" id="chk-exames" value="exames" checked>
+        <div class="modulo-info">
+          <h4>Módulo de Exames (Recomendado)</h4>
+          <p>Cria as abas 'Exames' e 'Exames_Referencia'. Ativa as funções de processamento e análise de tendência.</p>
+        </div>
+      </label>
+    </div>
+    
+    <div class="modulo-box">
+      <label>
+        <input type="checkbox" id="chk-ram" value="ram" checked>
+        <div class="modulo-info">
+          <h4>Módulo de Farmacovigilância (RAMs)</h4>
+          <p>Cria a aba 'FARMACOVIGILÂNCIA' e ativa os relatórios de RAMs e a avaliação de causalidade (Naranjo).</p>
+        </div>
+      </label>
+    </div>
+    
+    <div class="modulo-box">
+      <label>
+        <input type="checkbox" id="chk-custo" value="custo">
+        <div class="modulo-info">
+          <h4>Módulo de Custo-Efetividade (Avançado)</h4>
+          <p>Cria a aba 'Prescricao_CE' para análise de custo vs. eficácia (ex: comparação de marcas).</p>
+        </div>
+      </label>
+    </div>
+    
+    <hr style="border: 0; border-top: 1px solid var(--cor-borda); margin: 20px 0;">
+    
+    <button class="action" onclick="executar()">Criar Abas do Projeto</button>
+    
+    <div id="loading"><p>A configurar o seu projeto... Isto pode demorar até 30 segundos.</p></div>
+    <div id="error"></div>
+  </div>
+
+  <script>
+    function executar() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+
+      const modulos = [];
+      if (document.getElementById('chk-exames').checked) {
+        modulos.push('exames');
+      }
+      if (document.getElementById('chk-ram').checked) {
+        modulos.push('ram');
+      }
+      if (document.getElementById('chk-custo').checked) {
+        modulos.push('custo');
+      }
+
+      if (modulos.length === 0) {
+        mostrarErro({ message: "Por favor, selecione pelo menos um módulo." });
+        return;
+      }
+      
+      google.script.run
+        .withSuccessHandler(concluido)
+        .withFailureHandler(mostrarErro)
+        .executarSetupProjeto(modulos);
+    }
+
+    function concluido(mensagem) {
+      document.getElementById('loading').style.display = 'none';
+      google.script.host.close(); // Fecha o pop-up
+    }
+
+    function mostrarErro(erro) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').textContent = 'Erro: ' + erro.message;
+    }
+  </script>
+</body>
+</html>

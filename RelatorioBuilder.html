@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --cor-azul: #005a9c;
+      --cor-verde-escuro-titulo: #00573D; /* <-- SUA NOVA COR PROFISSIONAL */
+      --cor-fundo-app: #f4f7f6;
+      --cor-fundo-card: #ffffff;
+      --cor-borda: #e0e0e0;
+      --cor-texto-titulo: #1f1f1f;
+      --cor-texto-corpo: #444;
+      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --border-radius: 8px;
+    }
+    
+    body, html {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: var(--cor-fundo-app);
+      color: var(--cor-texto-corpo);
+      margin: 0;
+      padding: 24px;
+    }
+
+    /* --- SUA ATUALIZAÇÃO ESTÁ AQUI --- */
+    h3 {
+      font-size: 1.9em; /* Um pouco maior */
+      font-weight: 700; /* Mais grosso */
+      color: var(--cor-verde-escuro-titulo); /* Sua cor */
+      margin: 0 0 4px 0;
+      text-align: center; /* Centralizado */
+    }
+    
+    p {
+      font-size: 1.1em;
+      margin-top: 0;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--cor-borda);
+      text-align: center; /* Centraliza a descrição também */
+    }
+    /* --- FIM DA ATUALIZAÇÃO --- */
+    
+    .block {
+      background-color: var(--cor-fundo-card);
+      padding: 20px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--sombra-card);
+      margin-bottom: 16px;
+    }
+    
+    .label {
+      font-size: 1.1em;
+      font-weight: 600;
+      color: var(--cor-texto-titulo);
+      margin-bottom: 10px;
+      display: block;
+    }
+    
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .checkbox-group label:hover {
+      background-color: var(--cor-fundo-app);
+    }
+    .checkbox-group input[type="checkbox"] {
+      transform: scale(1.2);
+      margin-right: 12px;
+      accent-color: var(--cor-azul);
+    }
+
+    .hint {
+      font-size: 0.9em;
+      color: #777;
+      font-style: italic;
+      margin-left: 32px; /* Alinha com o texto do checkbox */
+      margin-top: -8px;
+      margin-bottom: 10px;
+      display: block;
+    }
+    
+    button.action {
+      font-size: 1.1em;
+      font-weight: bold;
+      color: #fff;
+      background-color: var(--cor-azul);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+    button.action:hover {
+      background-color: #004a80;
+      box-shadow: 0 4px 10px rgba(0, 90, 156, 0.3);
+    }
+    button.action:active {
+      transform: scale(0.98);
+    }
+
+    /* Feedback */
+    #loading, #error { 
+      margin-top: 15px; 
+      display: none; /* Correção de bug anterior */
+    }
+    #error { color: #dc3545; font-weight: bold; }
+    
+  </style>
+</head>
+<body>
+  
+  <h3>Construtor de Relatório Modular</h3>
+  <p>Selecione os "blocos" de análise para incluir no seu relatório estático.</p>
+
+  <div class="block">
+    <label class="label">Blocos Demográficos:</label>
+    <div class="checkbox-group">
+      <label><input type="checkbox" name="modulo" value="contagemSexo"> Contagem por Sexo</label>
+      <span class="hint">(i) Necessita da coluna: `SEXO` na aba 'Tabela'.</span>
+      
+      <label><input type="checkbox" name="modulo" value="contagemPrematuridade"> Contagem por Prematuridade</label>
+      <span class="hint">(i) Necessita da coluna: `IDADE GESTACIONAL` na aba 'Tabela'.</span>
+    </div>
+  </div>
+
+  <div class="block">
+    <label class="label">Blocos de Desfecho (Custo/Duração):</label>
+    <div class="checkbox-group">
+      <label><input type="checkbox" name="modulo" value="custoPorSexo"> Custo Médio por Sexo</label>
+      <span class="hint">(i) Necessita das colunas: `CUSTO TOTAL TRATAMENTO PCTE` e `SEXO`.</span>
+
+      <label><input type="checkbox" name="modulo" value="duracaoPorPrematuridade"> Duração Média por Prematuridade</label>
+      <span class="hint">(i) Necessita das colunas: `TRATAMENTO (DIAS)` e `IDADE GESTACIONAL`.</span>
+    </div>
+  </div>
+
+  <div class="block">
+    <button class="action" onclick="iniciarGeracao()">Gerar Relatório Modular</button>
+  </div>
+
+  <div id="loading"><p>Gerando relatório... Por favor, aguarde.</p></div>
+  <div id="error"></div>
+
+  <script>
+    function iniciarGeracao() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+
+      const modulosSelecionados = [];
+      const checkboxes = document.querySelectorAll('.checkbox-group input[type="checkbox"]:checked');
+      checkboxes.forEach(function(chk) {
+        modulosSelecionados.push(chk.value);
+      });
+
+      if (modulosSelecionados.length === 0) {
+        mostrarErro({ message: "Por favor, selecione pelo menos um módulo." });
+        return;
+      }
+      
+      google.script.run
+        .withSuccessHandler(geracaoCompleta)
+        .withFailureHandler(mostrarErro)
+        .gerarRelatorioModular(modulosSelecionados);
+    }
+
+    function geracaoCompleta(mensagem) {
+      document.getElementById('loading').style.display = 'none';
+      google.script.host.close();
+    }
+
+    function mostrarErro(erro) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').textContent = 'Erro: ' + erro.message;
+    }
+  </script>
+</body>
+</html>

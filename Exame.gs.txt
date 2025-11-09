@@ -1,0 +1,553 @@
+/**
+ * =============================================================
+ * MÓDULO 7: PROCESSADOR DE ANÁLISE DE EXAMES
+ * (v13 - AGORA SALVA A FAIXA DE REFERÊNCIA USADA)
+ * =============================================================
+ */
+
+/**
+ * Função principal, chamada pelo menu.
+ * Varre a aba 'Exames' e preenche a análise, REF_MIN, e REF_MAX.
+ */
+function processarAnaliseExames() {
+  const ui = SpreadsheetApp.getUi();
+  Logger.log("Iniciando 'processarAnaliseExames' (v13)...");
+  
+  let modalHtml = HtmlService.createHtmlOutput('<p>Processando exames...<br>A calcular e guardar faixas de referência.<br>Por favor, aguarde.</p>').setWidth(350).setHeight(120);
+  ui.showModalDialog(modalHtml, 'Analisando Exames');
+  SpreadsheetApp.flush();
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const examesSheet = ss.getSheetByName(CONFIG.sheets.exames);
+    if (!examesSheet) throw new Error("Aba '" + CONFIG.sheets.exames + "' não encontrada.");
+
+    // --- 1. Criar Mapas de Consulta (Otimização) ---
+    Logger.log("Construindo mapas de referência...");
+    const patientMap = buildPatientMap_(); // (Helper colado abaixo)
+    const referenceMap = buildReferenceMap_(); // (Helper colado abaixo)
+    Logger.log("Mapas construídos.");
+
+    // --- 2. Ler e Preparar Dados da Aba 'Exames' ---
+    const examesRange = examesSheet.getDataRange();
+    const examesData = examesRange.getValues();
+    const examesHeaders = examesData[0];
+
+    const idx = {
+      prontuario: examesHeaders.indexOf(CONFIG.headers.prontuario),
+      data: examesHeaders.indexOf(CONFIG.headers.exameData),
+      nome: examesHeaders.indexOf(CONFIG.headers.exameNome),
+      valor: examesHeaders.indexOf(CONFIG.headers.exameValor),
+      analise: examesHeaders.indexOf(CONFIG.headers.exameAnalise),
+      // --- NOVAS COLUNAS ---
+      refMin: examesHeaders.indexOf(CONFIG.headers.exameRefMin),
+      refMax: examesHeaders.indexOf(CONFIG.headers.exameRefMax)
+    };
+
+    if (Object.values(idx).some(i => i === -1)) {
+      Logger.log("Erro de Cabeçalho na aba 'Exames': " + JSON.stringify(idx));
+      throw new Error("Não foi possível encontrar uma ou mais colunas na aba '" + CONFIG.sheets.exames + "'. Verifique CONFIG.headers (incluindo REF_MIN/REF_MAX).");
+    }
+
+    const outputValuesAnalise = []; // Array para coluna ANÁLISE
+    const outputValuesRefMin = [];  // Array para coluna REF_MIN
+    const outputValuesRefMax = [];  // Array para coluna REF_MAX
+    
+    let linhasProcessadas = 0;
+    let erros = [];
+
+    // --- 3. Processar cada linha de exame ---
+    Logger.log("Iniciando processamento das linhas de exames...");
+    for (let i = 1; i < examesData.length; i++) {
+      const linha = examesData[i];
+      const linhaNum = i + 1;
+
+      const prontuario = String(linha[idx.prontuario] || "").trim();
+      const nomeExame = String(linha[idx.nome] || "").trim().toLowerCase();
+      const valorResultado = parseFloat(linha[idx.valor]);
+      let dataExame;
+      
+      try {
+        dataExame = new Date(linha[idx.data]);
+        if (isNaN(dataExame.getTime())) throw new Error("Data inválida");
+      } catch (e) {
+        erros.push(`Linha ${linhaNum}: Data do exame inválida.`);
+        outputValuesAnalise.push([linha[idx.analise]]); // Mantém o valor antigo
+        outputValuesRefMin.push([linha[idx.refMin]]);
+        outputValuesRefMax.push([linha[idx.refMax]]);
+        continue;
+      }
+
+      if (!prontuario || !nomeExame || isNaN(valorResultado)) {
+        outputValuesAnalise.push([linha[idx.analise]]);
+        outputValuesRefMin.push([linha[idx.refMin]]);
+        outputValuesRefMax.push([linha[idx.refMax]]);
+        continue; // Pula linha sem dados essenciais
+      }
+
+      // --- 4. A MÁGICA: Buscar Paciente e Calcular Idade Alvo ---
+      const patient = patientMap[prontuario];
+      if (!patient) {
+        erros.push(`Linha ${linhaNum}: Prontuário ${prontuario} não encontrado na Tabela.`);
+        outputValuesAnalise.push(["Erro: Prontuário?"]);
+        outputValuesRefMin.push([null]);
+        outputValuesRefMax.push([null]);
+        continue;
+      }
+      if (!patient.dataNasc) {
+        erros.push(`Linha ${linhaNum}: Paciente ${prontuario} sem Data de Nascimento.`);
+        outputValuesAnalise.push(["Erro: Data Nasc?"]);
+        outputValuesRefMin.push([null]);
+        outputValuesRefMax.push([null]);
+        continue;
+      }
+      if (!patient.sexo) {
+         erros.push(`Linha ${linhaNum}: Paciente ${prontuario} sem Sexo na Tabela.`);
+         outputValuesAnalise.push(["Erro: Sexo?"]);
+         outputValuesRefMin.push([null]);
+         outputValuesRefMax.push([null]);
+         continue;
+      }
+
+      const analiseTarget = getAnalysisTarget_(patient, dataExame, referenceMap, nomeExame);
+      const regraCorreta = findAndAnalyze_(referenceMap, nomeExame, analiseTarget, patient.sexo);
+      
+      // --- 5. Fazer a Análise E GUARDAR OS VALORES ---
+      if (!regraCorreta) {
+        outputValuesAnalise.push(["Sem Faixa Etária"]);
+        outputValuesRefMin.push([null]);
+        outputValuesRefMax.push([null]);
+      } else {
+        // Salva os valores de referência
+        outputValuesRefMin.push([regraCorreta.minValor]);
+        outputValuesRefMax.push([regraCorreta.maxValor]);
+        
+        // Faz a análise
+        if (valorResultado < regraCorreta.minValor) {
+          outputValuesAnalise.push(["Abaixo"]);
+        } else if (valorResultado > regraCorreta.maxValor) {
+          outputValuesAnalise.push(["Acima"]);
+        } else {
+          outputValuesAnalise.push(["Normal"]);
+        }
+      }
+      linhasProcessadas++;
+    }
+
+    // --- 6. Escrever os Resultados de Volta na Planilha ---
+    Logger.log(`Processamento concluído. ${linhasProcessadas} linhas analisadas.`);
+    if (outputValuesAnalise.length > 0) {
+      examesSheet.getRange(2, idx.analise + 1, outputValuesAnalise.length, 1).setValues(outputValuesAnalise);
+      examesSheet.getRange(2, idx.refMin + 1, outputValuesRefMin.length, 1).setValues(outputValuesRefMin);
+      examesSheet.getRange(2, idx.refMax + 1, outputValuesRefMax.length, 1).setValues(outputValuesRefMax);
+    }
+    
+    // Fecha o modal
+    try { ui.showModalDialog(HtmlService.createHtmlOutput("<script>google.script.host.close();</script>").setHeight(10).setWidth(10), "Fechando..."); } catch (e) {}
+    
+    let msgFinal = `${linhasProcessadas} exames analisados. As colunas ANÁLISE, REF_MIN e REF_MAX foram atualizadas.`;
+    if (erros.length > 0) {
+      msgFinal += `\n\nOcorreram ${erros.length} erros:\n` + erros.slice(0, 5).join('\n');
+      if (erros.length > 5) msgFinal += "\n...e mais " + (erros.length - 5) + " erros (ver logs).";
+      Logger.log("Erros na análise de exames: " + JSON.stringify(erros));
+    }
+    ui.alert("Análise de Exames Concluída!", msgFinal, ui.ButtonSet.OK);
+
+  } catch (err) {
+    Logger.log("ERRO FATAL em processarAnaliseExames: " + err.message + "\nStack: " + err.stack);
+    try { ui.showModalDialog(HtmlService.createHtmlOutput("<script>google.script.host.close();</script>").setHeight(10).setWidth(10), "Fechando..."); } catch (e) {}
+    ui.alert("Erro na Análise", "Ocorreu um erro: " + err.message + ". Verifique os logs.", ui.ButtonSet.OK);
+  }
+}
+
+// =============================================================
+// FUNÇÕES HELPER (COLADAS AQUI PARA SER AUTOSSUFICIENTE)
+// =============================================================
+
+/**
+ * HELPER 1: Constrói o mapa de regras da aba 'Exames_Referencia'
+ */
+function buildReferenceMap_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const refSheet = ss.getSheetByName(CONFIG.sheets.examesRef);
+  if (!refSheet) throw new Error("Aba '" + CONFIG.sheets.examesRef + "' não encontrada.");
+
+  const data = refSheet.getDataRange().getValues();
+  const headers = data.shift(); // Remove cabeçalho
+
+  const idx = {
+    nome: headers.indexOf(CONFIG.headers.exameRefNome),
+    tipo: headers.indexOf(CONFIG.headers.exameRefTipo),
+    sexo: headers.indexOf(CONFIG.headers.sexo), 
+    minDias: headers.indexOf(CONFIG.headers.exameRefMinDias),
+    maxDias: headers.indexOf(CONFIG.headers.exameRefMaxDias),
+    minValor: headers.indexOf(CONFIG.headers.exameRefMinValor),
+    maxValor: headers.indexOf(CONFIG.headers.exameRefMaxValor)
+  };
+
+  if (idx.sexo === -1) {
+     throw new Error("Coluna '" + CONFIG.headers.sexo + "' não foi encontrada na aba '" + CONFIG.sheets.examesRef + "'.");
+  }
+  if (Object.values(idx).some(i => i === -1)) {
+    throw new Error("Colunas faltando na aba '" + CONFIG.sheets.examesRef + "'. Verifique CONFIG.headers.");
+  }
+
+  const map = {};
+  data.forEach(row => {
+    const nomeExame = String(row[idx.nome]).trim().toLowerCase(); // <-- Sanitiza aqui
+    const tipoRegra = String(row[idx.tipo]).trim();
+    if (!nomeExame || !tipoRegra) return;
+
+    if (!map[nomeExame]) {
+      map[nomeExame] = {};
+    }
+    if (!map[nomeExame][tipoRegra]) {
+      map[nomeExame][tipoRegra] = [];
+    }
+    
+    map[nomeExame][tipoRegra].push({
+      sexo: String(row[idx.sexo] || "Ambos").toUpperCase().charAt(0), // "M", "F", "A"
+      minDias: parseInt(row[idx.minDias], 10),
+      maxDias: parseInt(row[idx.maxDias], 10),
+      minValor: parseFloat(row[idx.minValor]),
+      maxValor: parseFloat(row[idx.maxValor])
+    });
+  });
+  return map;
+}
+
+/**
+ * HELPER 3: Decide qual tipo de regra e qual idade usar.
+ */
+function getAnalysisTarget_(patient, dataExame, referenceMap, nomeExame) {
+  const ONE_DAY_MS = 1000 * 60 * 60 * 24;
+  const idadeCronologicaDias = Math.floor((dataExame.getTime() - patient.dataNasc.getTime()) / ONE_DAY_MS);
+
+  if (!patient.éPrematuro) {
+    return {
+      tipoRegra: "Padrão",
+      idadeParaComparar: idadeCronologicaDias
+    };
+  }
+  
+  const diasPrematuridade = (40 - patient.semanasGestao) * 7;
+  const idadeCorrigidaDias = idadeCronologicaDias - diasPrematuridade;
+
+  if (idadeCorrigidaDias < 0) {
+    let prematuroRuleExists = false;
+    if (referenceMap[nomeExame] && referenceMap[nomeExame]["Prematuro Específico"]) {
+      prematuroRuleExists = true;
+    }
+
+    if (prematuroRuleExists) {
+      return {
+        tipoRegra: "Prematuro Específico",
+        idadeParaComparar: -1 
+      };
+    } else {
+      return {
+        tipoRegra: "Padrão",
+        idadeParaComparar: idadeCronologicaDias
+      };
+    }
+  }
+  
+  return {
+    tipoRegra: "Padrão",
+    idadeParaComparar: idadeCronologicaDias
+  };
+}
+
+/**
+ * HELPER 4: Encontra a regra correta no mapa e analisa o valor.
+ */
+function findAndAnalyze_(referenceMap, nomeExame, analiseTarget, patientSexo) {
+  const exameRules = referenceMap[nomeExame];
+  if (!exameRules) return null; // Sem Regra
+
+  const regrasParaTipo = exameRules[analiseTarget.tipoRegra];
+  if (!regrasParaTipo) return null; // Sem Tipo de Regra
+
+  const regrasSexoEspecifico = regrasParaTipo.filter(r => r.sexo === patientSexo);
+  const regrasAmbos = regrasParaTipo.filter(r => r.sexo === "A");
+  const regrasRelevantes = regrasSexoEspecifico.concat(regrasAmbos);
+  if (regrasRelevantes.length === 0) return null; // Sem Regra (Sexo)
+
+  let regraCorreta = null;
+  if (analiseTarget.tipoRegra === "Prematuro Específico") {
+    regraCorreta = regrasRelevantes[0];
+  } else {
+    regraCorreta = regrasRelevantes.find(
+      r => analiseTarget.idadeParaComparar >= r.minDias && analiseTarget.idadeParaComparar <= r.maxDias
+    );
+  }
+
+  if (!regraCorreta) return null; // Sem Faixa Etária
+
+  // Retorna o objeto da regra inteira (minValor, maxValor)
+  return regraCorreta;
+}
+
+/**
+ * Esta função é chamada pela sidebar (HTML) para buscar os dados.
+ * === VERSÃO COMPLETA (v2) COM HISTÓRICO DE EXAMES ===
+ */
+function buscarDadosPacienteSelecionado() {
+  try {
+    Logger.log("Iniciando 'buscarDadosPacienteSelecionado'...");
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const celulaAtiva = ss.getActiveCell();
+    if (!celulaAtiva) {
+      Logger.log("Falha: Nenhuma célula ativa encontrada.");
+      return { error: "Nenhuma célula selecionada." };
+    }
+
+    const abaAtiva = celulaAtiva.getSheet();
+    const nomeAbaAtiva = abaAtiva.getName();
+    const linhaAtiva = celulaAtiva.getRow();
+    Logger.log("Aba ativa: " + nomeAbaAtiva + ", Linha ativa: " + linhaAtiva);
+
+    let prontuarioSelecionado = null;
+    const abasValidas = [
+      CONFIG.sheets.prescricao, 
+      CONFIG.sheets.pacientes, 
+      CONFIG.sheets.tabelaResumo,
+      CONFIG.sheets.exames // Agora também pode buscar da aba Exames
+    ];
+
+    if (abasValidas.includes(nomeAbaAtiva) && linhaAtiva > 1) {
+      const cabecalhos = abaAtiva.getRange(1, 1, 1, abaAtiva.getLastColumn()).getValues()[0];
+      const idxProntuario = cabecalhos.indexOf(CONFIG.headers.prontuario);
+
+      if (idxProntuario === -1) {
+        const erroMsg = "Coluna '" + CONFIG.headers.prontuario + "' não encontrada na aba '" + nomeAbaAtiva + "'. Verifique CONFIG.headers.";
+        Logger.log(erroMsg);
+        return { error: erroMsg };
+      }
+      prontuarioSelecionado = abaAtiva.getRange(linhaAtiva, idxProntuario + 1).getValue();
+      prontuarioSelecionado = prontuarioSelecionado ? String(prontuarioSelecionado).trim() : null;
+    }
+
+    if (!prontuarioSelecionado) {
+      const erroMsg = "Selecione uma célula com dados de um paciente em uma das abas: '" + abasValidas.join("', '") + "'.";
+      Logger.log("Falha: Nenhum prontuário válido selecionado ou aba não configurada. Aba: " + nomeAbaAtiva);
+      return { error: erroMsg };
+    }
+    
+    Logger.log("Prontuário selecionado: '" + prontuarioSelecionado + "'");
+    
+    // --- Inicializa objeto de retorno ---
+    const dadosPaciente = {
+      prontuario: prontuarioSelecionado,
+      nome: "Nome não encontrado",
+      sexo: "N/D",
+      classificacao: "N/D",
+      historicoDoses: [],
+      historicoPesos: [],
+      // --- ADICIONADO ---
+      historicoExames: [] 
+      // --- FIM DA ADIÇÃO ---
+    };
+    
+    // --- FUNÇÃO AUXILIAR PARA FORMATAR DATAS ---
+    function formatarData(dataValor) {
+      if (!dataValor || !(dataValor instanceof Date)) {
+        try {
+          dataValor = new Date(dataValor);
+          if (isNaN(dataValor.getTime())) return "Data Inválida";
+        } catch (e) {
+          return "Data Inválida";
+        }
+      }
+      return Utilities.formatDate(dataValor, Session.getScriptTimeZone(), "dd/MM/yyyy");
+    }
+
+    // --- Cache para dados das abas (evita múltiplas leituras se abas forem iguais)
+    const cacheAbas = {};
+    function getSheetData(sheetName) {
+      if (cacheAbas[sheetName]) {
+        return cacheAbas[sheetName];
+      }
+      const aba = ss.getSheetByName(sheetName);
+      if (aba) {
+        const dados = aba.getDataRange().getValues();
+        cacheAbas[sheetName] = dados;
+        return dados;
+      }
+      return null;
+    }
+
+    // --- BLOCO 0: Buscar NOME e DADOS GERAIS na aba 'Pacientes' ---
+    const dadosPac = getSheetData(CONFIG.sheets.pacientes);
+    if (dadosPac) {
+      const cabecalhosPacientes = dadosPac[0];
+      const idxProntuarioPac = cabecalhosPacientes.indexOf(CONFIG.headers.prontuario);
+      const idxNomePac = cabecalhosPacientes.indexOf(CONFIG.headers.nomePaciente);
+      if (idxProntuarioPac !== -1 && idxNomePac !== -1) {
+        for (let i = 1; i < dadosPac.length; i++) {
+          if (String(dadosPac[i][idxProntuarioPac]).trim() == prontuarioSelecionado) {
+            dadosPaciente.nome = dadosPac[i][idxNomePac];
+            Logger.log("Nome encontrado na aba 'Pacientes': " + dadosPaciente.nome);
+            break;
+          }
+        }
+      } else { Logger.log("Aviso: Cabeçalhos 'PRONTUÁRIO' ou 'PACIENTE' não encontrados na aba 'Pacientes'.");
+      }
+    } else { Logger.log("Aba 'Pacientes' não encontrada.");
+    }
+
+    // --- BLOCO 0.5: Buscar na aba 'Tabela' (prioridade para Sexo/Classificação, fallback para Nome) ---
+    const dadosTabela = getSheetData(CONFIG.sheets.tabelaResumo);
+    if (dadosTabela) {
+      const cabecalhosTabela = dadosTabela[0];
+      const idxProntuarioTab = cabecalhosTabela.indexOf(CONFIG.headers.prontuario);
+      const idxNomeTab = cabecalhosTabela.indexOf(CONFIG.headers.nomePaciente);
+      const idxSexoTab = cabecalhosTabela.indexOf(CONFIG.headers.sexo);
+      const idxClassificacaoTab = cabecalhosTabela.indexOf(CONFIG.headers.gestacao); // Usando a coluna de idade gestacional
+
+      if (idxProntuarioTab !== -1) {
+        const linhaTabela = dadosTabela.find(linha => String(linha[idxProntuarioTab]).trim() == prontuarioSelecionado);
+        if (linhaTabela) {
+          if (dadosPaciente.nome === "Nome não encontrado" && idxNomeTab !== -1) {
+            dadosPaciente.nome = linhaTabela[idxNomeTab];
+            Logger.log("Nome encontrado na aba 'Tabela': " + dadosPaciente.nome);
+          }
+          if (idxSexoTab !== -1 && linhaTabela[idxSexoTab]) {
+            dadosPaciente.sexo = linhaTabela[idxSexoTab];
+          }
+          if (idxClassificacaoTab !== -1 && linhaTabela[idxClassificacaoTab]) {
+            const classificacaoMatch = String(linhaTabela[idxClassificacaoTab]).match(/([^(]*)/); // Pega texto antes do "("
+            if (classificacaoMatch) {
+              dadosPaciente.classificacao = classificacaoMatch[1].trim();
+            } else {
+               Logger.log("Não foi possível extrair a classificação da coluna 'Idade Gestacional': " + linhaTabela[idxClassificacaoTab]);
+            }
+          }
+          Logger.log(`Dados da 'Tabela': Sexo=${dadosPaciente.sexo}, Classificação=${dadosPaciente.classificacao}`);
+        } else {
+          Logger.log("Prontuário '" + prontuarioSelecionado + "' não encontrado na aba 'Tabela'.");
+        }
+      } else { Logger.log("Aviso: Cabeçalho 'PRONTUÁRIO' não encontrado na aba 'Tabela'.");
+      }
+    } else { Logger.log("Aba 'Tabela' não encontrada.");
+    }
+
+
+    // --- BLOCO 1: Buscar Histórico de Doses ---
+    const todosDadosPrescricao = getSheetData(CONFIG.sheets.prescricao);
+    if (todosDadosPrescricao) {
+      const cabecalhosPrescricao = todosDadosPrescricao[0];
+      const idxProntuarioPresc = cabecalhosPrescricao.indexOf(CONFIG.headers.prontuario);
+      const idxDataInicio = cabecalhosPrescricao.indexOf(CONFIG.headers.dataInicio);
+      const idxDose = cabecalhosPrescricao.indexOf(CONFIG.headers.doseAdministrada);
+      const idxTaxa = cabecalhosPrescricao.indexOf(CONFIG.headers.colTaxaResultante);
+      const idxSexoPresc = cabecalhosPrescricao.indexOf(CONFIG.headers.sexo);
+      const idxClassificacaoPresc = cabecalhosPrescricao.indexOf(CONFIG.headers.classificacao);
+      if ([idxProntuarioPresc, idxDataInicio, idxDose, idxTaxa].includes(-1)) {
+        Logger.log("Aviso: Cabeçalhos essenciais não encontrados na aba 'Prescrição de Doses'. Histórico de doses pode estar incompleto.");
+      } else {
+        const linhasFiltradas = todosDadosPrescricao.slice(1).filter(linha => String(linha[idxProntuarioPresc]).trim() == prontuarioSelecionado);
+        if (linhasFiltradas.length > 0) {
+          if ((dadosPaciente.sexo === "N/D" || !dadosPaciente.sexo) && idxSexoPresc !== -1 && linhasFiltradas[0][idxSexoPresc]) {
+            dadosPaciente.sexo = linhasFiltradas[0][idxSexoPresc];
+            Logger.log("Sexo obtido da aba 'Prescrição de Doses'.");
+          }
+          if ((dadosPaciente.classificacao === "N/D" || !dadosPaciente.classificacao) && idxClassificacaoPresc !== -1 && linhasFiltradas[0][idxClassificacaoPresc]) {
+            dadosPaciente.classificacao = linhasFiltradas[0][idxClassificacaoPresc];
+            Logger.log("Classificação obtida da aba 'Prescrição de Doses'.");
+          }
+
+          dadosPaciente.historicoDoses = linhasFiltradas.map(linha => ({
+            data: formatarData(linha[idxDataInicio]),
+            dose: linha[idxDose],
+            taxa: typeof linha[idxTaxa] === 'number' ? linha[idxTaxa].toFixed(2) : linha[idxTaxa]
+          })).sort((a, b) => { 
+            try {
+              const dateA = a.data !== "Data Inválida" ? new Date(a.data.split('/').reverse().join('-')) : new Date(0);
+              const dateB = b.data !== "Data Inválida" ? new Date(b.data.split('/').reverse().join('-')) : new Date(0);
+              if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
+              return dateA - dateB;
+            } catch (e) { return 0; }
+          });
+        }
+        Logger.log(dadosPaciente.historicoDoses.length + " registros de dose encontrados para " + prontuarioSelecionado);
+      }
+    } else { Logger.log("Aba 'Prescrição de Doses' não encontrada.");
+    }
+
+    // --- BLOCO 2: Buscar Histórico de Pesos ---
+    const todosDadosPeso = getSheetData(CONFIG.sheets.peso);
+    if (todosDadosPeso) {
+      const cabecalhosPeso = todosDadosPeso[0];
+      const idxProntuarioPeso = cabecalhosPeso.indexOf(CONFIG.headers.prontuario);
+      const idxDataPeso = cabecalhosPeso.indexOf(CONFIG.headers.dataPeso);
+      const idxPeso = cabecalhosPeso.indexOf(CONFIG.headers.peso);
+
+      if (idxProntuarioPeso === -1 || idxDataPeso === -1 || idxPeso === -1) {
+        Logger.log("Aviso: Cabeçalhos não encontrados na aba 'Registro de Peso'. Verifique CONFIG.headers.");
+      } else {
+        dadosPaciente.historicoPesos = todosDadosPeso.slice(1)
+          .filter(linha => String(linha[idxProntuarioPeso]).trim() == prontuarioSelecionado)
+          .map(linha => ({
+            data: formatarData(linha[idxDataPeso]),
+            peso: (typeof linha[idxPeso] === 'number') ? linha[idxPeso] : null
+          }))
+          .sort((a, b) => { 
+             try {
+              const dateA = a.data !== "Data Inválida" ? new Date(a.data.split('/').reverse().join('-')) : new Date(0);
+              const dateB = b.data !== "Data Inválida" ? new Date(b.data.split('/').reverse().join('-')) : new Date(0);
+              if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
+              return dateA - dateB;
+            } catch (e) { return 0; }
+          });
+        Logger.log(dadosPaciente.historicoPesos.length + " registros de peso encontrados para " + prontuarioSelecionado);
+      }
+    } else { Logger.log("Aba 'Registro de Peso' não encontrada.");
+    }
+    
+    // --- BLOCO 3: ADICIONADO ---
+    // Buscar Histórico de Exames (da aba 'Exames')
+    const todosDadosExames = getSheetData(CONFIG.sheets.exames);
+    if (todosDadosExames) {
+      const cabecalhosExames = todosDadosExames[0];
+      const idxProntuarioEx = cabecalhosExames.indexOf(CONFIG.headers.prontuario);
+      const idxDataEx = cabecalhosExames.indexOf(CONFIG.headers.exameData);
+      const idxNomeEx = cabecalhosExames.indexOf(CONFIG.headers.exameNome);
+      const idxValorEx = cabecalhosExames.indexOf(CONFIG.headers.exameValor);
+      const idxAnaliseEx = cabecalhosExames.indexOf(CONFIG.headers.exameAnalise);
+      
+      if ([idxProntuarioEx, idxDataEx, idxNomeEx, idxValorEx, idxAnaliseEx].includes(-1)) {
+         Logger.log("Aviso: Cabeçalhos não encontrados na aba 'Exames'. Verifique CONFIG.headers.");
+      } else {
+         dadosPaciente.historicoExames = todosDadosExames.slice(1)
+          .filter(linha => String(linha[idxProntuarioEx]).trim() == prontuarioSelecionado)
+          .map(linha => ({
+            data: formatarData(linha[idxDataEx]),
+            nome: linha[idxNomeEx],
+            valor: (typeof linha[idxValorEx] === 'number') ? linha[idxValorEx] : linha[idxValorEx],
+            analise: linha[idxAnaliseEx]
+          }))
+          .sort((a, b) => { 
+             try {
+              const dateA = a.data !== "Data Inválida" ? new Date(a.data.split('/').reverse().join('-')) : new Date(0);
+              const dateB = b.data !== "Data Inválida" ? new Date(b.data.split('/').reverse().join('-')) : new Date(0);
+              if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
+              return dateA - dateB;
+            } catch (e) { return 0; }
+          });
+        Logger.log(dadosPaciente.historicoExames.length + " registros de exame encontrados para " + prontuarioSelecionado);
+      }
+    } else {
+      Logger.log("Aba 'Exames' não encontrada.");
+    }
+    // --- FIM DO BLOCO 3 ---
+
+    Logger.log("Retornando dados com sucesso para prontuário " + prontuarioSelecionado + ": Nome=" + dadosPaciente.nome);
+    return dadosPaciente;
+    
+  } catch (err) {
+    Logger.log("ERRO FATAL em buscarDadosPacienteSelecionado: " + err + "\nStack: " + err.stack);
+    return { error: "Ocorreu um erro ao buscar os dados: " + err.message };
+  }
+}

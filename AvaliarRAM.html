@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/styles.css">
+  <style>
+    body { padding: 15px; background-color: #f9f9f9; }
+    .header { padding-bottom: 10px; border-bottom: 1px solid #ccc; margin-bottom: 15px; }
+    .header h4 { margin: 0; }
+    .header p { margin: 0; font-size: 0.9em; color: #555; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-weight: bold; font-size: 0.9em; margin-bottom: 4px; }
+    select { width: 100%; }
+    #loading, #error { display: none; }
+    #error { color: #dc3545; font-weight: bold; }
+    #loading-overlay { 
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.8); z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading-overlay">
+    <p>Carregando dados da avaliação...</p>
+  </div>
+
+  <div class="header">
+    <h4>Algoritmo de Naranjo</h4>
+    <p>Paciente: <strong id="paciente-prontuario">...</strong></p>
+    <p>Medicamento: <strong id="paciente-medicamento">...</strong></p>
+    <p>Reação: <strong id="paciente-ram">...</strong></p>
+  </div>
+  
+  <div id="error"></div>
+  
+  <form id="naranjo-form">
+    <input type="hidden" id="id-evento-ram" name="idEventoRam">
+
+    <div class="form-group">
+      <label>1. Existem relatos conclusivos sobre essa reação?</label>
+      <select id="q1" name="q1" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="1">Sim (+1)</option>
+        <option value="0">Não (0)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>2. O evento clínico apareceu após a admin. do fármaco?</label>
+      <select id="q2" name="q2" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="2">Sim (+2)</option>
+        <option value="-1">Não (-1)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>3. A reação desapareceu com a descontinuação?</label>
+      <select id="q3" name="q3" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="1">Sim (+1)</option>
+        <option value="0">Não (0)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>4. A reação reapareceu com a readministração?</label>
+      <select id="q4" name="q4" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="2">Sim (+2)</option>
+        <option value="-1">Não (-1)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>5. Existem causas alternativas?</label>
+      <select id="q5" name="q5" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="-1">Sim (-1)</option>
+        <option value="2">Não (+2)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>6. A reação apareceu com placebo?</label>
+      <select id="q6" name="q6" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="-1">Sim (-1)</option>
+        <option value="1">Não (+1)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>7. Fármaco detectado em concentração tóxica?</label>
+      <select id="q7" name="q7" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="1">Sim (+1)</option>
+        <option value="0">Não (0)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>8. Reação aumentou com dose maior / diminuiu com dose menor?</label>
+      <select id="q8" name="q8" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="1">Sim (+1)</option>
+        <option value="0">Não (0)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>9. Paciente teve reação prévia similar (mesmo fármaco/similar)?</label>
+      <select id="q9" name="q9" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="1">Sim (+1)</option>
+        <option value="0">Não (0)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>10. Reação confirmada por evidência objetiva?</label>
+      <select id="q10" name="q10" class="form-control">
+        <option value="0">Não Sabe (0)</option>
+        <option value="1">Sim (+1)</option>
+        <option value="0">Não (0)</option>
+      </select>
+    </div>
+    
+    <br>
+    <button type="button" class="action" onclick="salvarFormulario()">Salvar Avaliação</button>
+    <div id="loading" style="display: none; padding-top: 10px;">Salvando...</div>
+  </form>
+
+  <script>
+    let dadosDoFormulario = null;
+    
+    // 1. Ao carregar a sidebar, chama o backend para buscar os dados
+    window.addEventListener('load', function() {
+      // --- MUDANÇA AQUI ---
+      google.script.run
+        .withSuccessHandler(preencherFormulario)
+        .withFailureHandler(mostrarErro)
+        .obterDadosParaAvaliacao(); // <-- Chama a nova função
+      // --- FIM DA MUDANÇA ---
+    });
+
+    // 2. Preenche o formulário com dados da linha selecionada
+    function preencherFormulario(dados) {
+      if (dados.error) {
+        mostrarErro(dados);
+        return;
+      }
+      
+      // Salva os dados para envio posterior
+      dadosDoFormulario = dados.dadosSalvos;
+
+      // Preenche o cabeçalho
+      document.getElementById('paciente-prontuario').textContent = dados.prontuario;
+      document.getElementById('paciente-medicamento').textContent = dados.medicamentoSuspeito;
+      document.getElementById('paciente-ram').textContent = dados.ramDescrita;
+      document.getElementById('id-evento-ram').value = dados.idEventoRam;
+      
+      // Preenche as 10 respostas (se já existirem)
+      if (dados.dadosSalvos) {
+        document.getElementById('q1').value = dados.dadosSalvos.Q1_RELATOS_PREVIOS;
+        document.getElementById('q2').value = dados.dadosSalvos.Q2_TEMPO;
+        document.getElementById('q3').value = dados.dadosSalvos.Q3_SUSPENSAO;
+        document.getElementById('q4').value = dados.dadosSalvos.Q4_READMINISTRACAO;
+        document.getElementById('q5').value = dados.dadosSalvos.Q5_CAUSAS_ALTERNATIVAS;
+        document.getElementById('q6').value = dados.dadosSalvos.Q6_PLACEBO;
+        document.getElementById('q7').value = dados.dadosSalvos.Q7_NIVEL_TOXICO;
+        document.getElementById('q8').value = dados.dadosSalvos.Q8_DOSE;
+        document.getElementById('q9').value = dados.dadosSalvos.Q9_HISTORIA_PREVIA;
+        document.getElementById('q10').value = dados.dadosSalvos.Q10_CONFIRMACAO_OBJETIVA;
+      }
+      
+      document.getElementById('loading-overlay').style.display = 'none';
+    }
+
+    // 3. Pega todos os valores do formulário e envia para o backend
+    function salvarFormulario() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+
+      const dadosParaSalvar = {
+        idEventoRam: document.getElementById('id-evento-ram').value,
+        medicamentoSuspeito: document.getElementById('paciente-medicamento').textContent,
+        ramDescrita: document.getElementById('paciente-ram').textContent,
+        
+        Q1_RELATOS_PREVIOS: document.getElementById('q1').value,
+        Q2_TEMPO: document.getElementById('q2').value,
+        Q3_SUSPENSAO: document.getElementById('q3').value,
+        Q4_READMINISTRACAO: document.getElementById('q4').value,
+        Q5_CAUSAS_ALTERNATIVAS: document.getElementById('q5').value,
+        Q6_PLACEBO: document.getElementById('q6').value,
+        Q7_NIVEL_TOXICO: document.getElementById('q7').value,
+        Q8_DOSE: document.getElementById('q8').value,
+        Q9_HISTORIA_PREVIA: document.getElementById('q9').value,
+        Q10_CONFIRMACAO_OBJETIVA: document.getElementById('q10').value
+      };
+      
+      google.script.run
+        .withSuccessHandler(salvoComSucesso)
+        .withFailureHandler(mostrarErro)
+        .salvarAvaliacaoNaranjo(dadosParaSalvar);
+    }
+    
+    function salvoComSucesso(resultado) {
+      document.getElementById('loading').style.display = 'none';
+      google.script.host.close(); // Fecha a sidebar
+    }
+
+    function mostrarErro(erro) {
+      document.getElementById('loading-overlay').style.display = 'none';
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').textContent = 'Erro: ' + erro.message;
+    }
+  </script>
+</body>
+</html>

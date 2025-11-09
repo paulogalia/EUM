@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nouislider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nouislider/15.7.1/nouislider.min.js"></script>
+
+    <style>
+      :root {
+        --cor-primaria: #005a9c;
+        --cor-primaria-hover: #004a80;
+        --cor-fundo-app: #f4f7f6;
+        --cor-fundo-card: #ffffff;
+        --cor-borda: #e0e0e0;
+        --cor-texto-titulo: #1f1f1f;
+        --cor-texto-corpo: #444;
+        --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+        --border-radius: 8px;
+      }
+      body, html {
+        margin: 0; padding: 0;
+        width: 100%; height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        background-color: var(--cor-fundo-app);
+      }
+      
+      .container-lab {
+        display: grid;
+        grid-template-columns: 320px 1fr; 
+        grid-template-rows: 1fr;
+        height: 100vh;
+      }
+      
+      .control-panel {
+        background-color: var(--cor-fundo-card);
+        border-right: 1px solid var(--cor-borda);
+        padding: 20px;
+        box-shadow: var(--sombra-card);
+        overflow-y: auto;
+      }
+      
+      .control-panel h4 {
+        font-size: 1.2em;
+        font-weight: 600;
+        color: var(--cor-texto-titulo);
+        margin: 0 0 15px 0;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--cor-borda);
+      }
+      
+      .control-group { margin-bottom: 20px; }
+      .control-group label {
+        display: block; font-weight: bold;
+        font-size: 0.9em; margin-bottom: 6px;
+      }
+      .control-group select {
+        width: 100%; padding: 8px; font-size: 0.9em;
+        border: 1px solid var(--cor-borda);
+        border-radius: 6px; background-color: #fff;
+      }
+      
+      /* Checkboxes de Exames (Sua Ideia) */
+      .checkbox-group {
+        max-height: 150px; overflow-y: auto;
+        border: 1px solid var(--cor-borda);
+        border-radius: 6px; padding: 5px;
+      }
+      .checkbox-group label {
+        display: flex; align-items: center; padding: 8px;
+        border-radius: 4px; cursor: pointer;
+        transition: background-color 0.2s ease;
+      }
+      .checkbox-group label:hover { background-color: var(--cor-fundo-app); }
+      .checkbox-group input { margin-right: 10px; }
+      
+      /* Slider de Idade (Sua Ideia) */
+      #age-slider { margin-top: 15px; }
+      .slider-readout {
+        font-size: 0.9em; font-weight: 500;
+        color: var(--cor-texto-corpo);
+        margin-top: 10px;
+      }
+      
+      button.action {
+        font-size: 1em; font-weight: bold; color: #fff;
+        background-color: var(--cor-primaria);
+        border: none; padding: 12px; border-radius: 6px;
+        cursor: pointer; width: 100%;
+        transition: all 0.2s ease;
+      }
+      button.action:hover { background-color: var(--cor-primaria-hover); }
+
+      .chart-container { padding: 20px; }
+      #graficoPlotly {
+        width: 100%; height: 95%; 
+        background-color: var(--cor-fundo-card);
+        border-radius: var(--border-radius);
+        box-shadow: var(--sombra-card);
+      }
+    </style>
+  </head>
+  <body>
+    
+    <div class="container-lab">
+      
+      <div class="control-panel">
+        <h4>Laboratório de Análise</h4>
+        
+        <div class="control-group">
+          <label for="exames-checkbox-group">1. Exames (Desfechos):</label>
+          <div id="exames-checkbox-group" class="checkbox-group">
+            </div>
+        </div>
+        
+        <div class="control-group">
+          <label>2. Filtro de Idade (em Dias):</label>
+          <div id="age-slider"></div>
+          <div id="age-readout" class="slider-readout">A carregar...</div>
+        </div>
+        
+        <div class="control-group">
+          <label for="control-agrupamento">3. Agrupar tempo por:</label>
+          <select id="control-agrupamento">
+            <option value="semana">Semana</option>
+            <option value="dia">Dia</option>
+            <option value="mes">Mês</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="control-tipografico">4. Tipo de Gráfico (Análise):</label>
+          <select id="control-tipografico">
+            <option value="media">Média da Coorte</option>
+            <option value="individual">Linhas de Pacientes Individuais</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="control-divisaomedia">5. Dividir Média por:</label>
+          <select id="control-divisaomedia">
+            <option value="todos">Média Total (1 linha)</option>
+            <option value="SEXO">Sexo (M vs. F)</option>
+            <option value="IDADE GESTACIONAL">Prematuridade</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="control-bandaerro">6. Banda de Erro (para Média):</label>
+          <select id="control-bandaerro">
+            <option value="nenhuma">Nenhuma</option>
+            <option value="dp">Desvio Padrão (±DP)</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="control-tipovisual">7. Tipo de Visualização:</label>
+          <select id="control-tipovisual">
+            <option value="lines+markers">Linhas + Pontos</option>
+            <option value="bar">Barras</option>
+            <option value="lines">Apenas Linhas</option>
+            <option value="markers">Apenas Pontos (Dispersão)</option>
+          </select>
+        </div>
+        
+        <br>
+        <button class="action" onclick="desenharGrafico()">🔄 Atualizar Gráfico</button>
+      </div>
+      
+      <div class="chart-container">
+        <div id="graficoPlotly"></div>
+      </div>
+      
+    </div>
+
+    <script>
+      // 1. Recebe os DADOS BRUTOS (injetados pelo 'Analise.gs')
+      const dadosInjetados = <?!= dadosBrutos; ?>;
+      const globalRawData = dadosInjetados.rawData;
+      const infoProjeto = dadosInjetados.info;
+      const configPredefinida = dadosInjetados.info.configGrafico;
+      
+      // 2. Variáveis Globais
+      let globalPlotlyTraces = [];
+      let globalPlotlyLayout = {};
+      let globalAgeSlider = null;
+      let minAge = 0;
+      let maxAge = 0;
+
+      // 3. Helpers de JavaScript (dentro do navegador)
+      function calcularEstatisticas(arr) {
+        if (!arr || arr.length === 0) return { media: null, n: 0, stdDev: null };
+        const n = arr.length;
+        const sum = arr.reduce((a, b) => a + b, 0);
+        const media = sum / n;
+        if (n === 1) return { media: media, n: 1, stdDev: 0 };
+        const variancia = arr.map(x => Math.pow(x - media, 2)).reduce((a, b) => a + b, 0) / (n - 1);
+        const stdDev = Math.sqrt(variancia);
+        return { media: media, n: n, stdDev: stdDev };
+      }
+      
+      /**
+       * A "MÁGICA" (v11): Função principal que processa os dados brutos
+       * e desenha o gráfico com base nos controlos
+       */
+      function desenharGrafico() {
+        console.log("A redesenhar gráfico...");
+        
+        // 1. Lê as "Caixas de Alteração"
+        const examesSelecionados = Array.from(document.querySelectorAll('#exames-checkbox-group input:checked')).map(cb => cb.value);
+        const [idadeMinSelecionada, idadeMaxSelecionada] = globalAgeSlider.get();
+        const agrupamento = document.getElementById('control-agrupamento').value;
+        const tipoGrafico = document.getElementById('control-tipografico').value;
+        const divisaoMedia = document.getElementById('control-divisaomedia').value;
+        const bandaErro = document.getElementById('control-bandaerro').value;
+        
+        // --- PASSO DE ADIÇÃO (v11) ---
+        const tipoVisual = document.getElementById('control-tipovisual').value;
+        // --- FIM DA ADIÇÃO ---
+        
+        // 2. FILTRAR os dados brutos
+        const dadosFiltrados = globalRawData.filter(row => {
+          if (!examesSelecionados.includes(row.nomeExame)) return false;
+          if (row.idadeEmDias !== null && (row.idadeEmDias < idadeMinSelecionada || row.idadeEmDias > idadeMaxSelecionada)) return false;
+          return true;
+        });
+        
+        // 3. Agrupa os dados (Bucketing)
+        const bucketsAgrupados = {};
+        dadosFiltrados.forEach(row => {
+          let bucketId;
+          if (agrupamento === "semana") bucketId = Math.floor(row.diasRelativos / 7);
+          else if (agrupamento === "mes") bucketId = Math.floor(row.diasRelativos / 30.44);
+          else bucketId = row.diasRelativos;
+          let coorte = "Média Total";
+          if (tipoGrafico === 'individual') {
+            coorte = `${row.nomePaciente} (${row.prontuario})`;
+          } else if (divisaoMedia === "SEXO") {
+            coorte = row.sexo || "N/D";
+          } else if (divisaoMedia === "IDADE GESTACIONAL") {
+            coorte = row.éPrematuro ? "Prematuro" : "Padrão";
+          }
+          if (!bucketsAgrupados[row.nomeExame]) bucketsAgrupados[row.nomeExame] = {};
+          if (!bucketsAgrupados[row.nomeExame][coorte]) bucketsAgrupados[row.nomeExame][coorte] = {};
+          if (!bucketsAgrupados[row.nomeExame][coorte][bucketId]) bucketsAgrupados[row.nomeExame][coorte][bucketId] = [];
+          bucketsAgrupados[row.nomeExame][coorte][bucketId].push(row);
+        });
+
+        // 4. Transforma os buckets em "traces" (linhas) do Plotly
+        globalPlotlyTraces = [];
+        const exames = Object.keys(bucketsAgrupados);
+        
+        exames.forEach(nomeExame => {
+          const dadosDoExame = bucketsAgrupados[nomeExame];
+          const coortes = Object.keys(dadosDoExame).sort();
+          const todosBuckets = new Set();
+          Object.values(dadosDoExame).forEach(grupo => {
+            Object.keys(grupo).forEach(bucketId => todosBuckets.add(Number(bucketId)));
+          });
+          const bucketsOrdenados = Array.from(todosBuckets).sort((a, b) => a - b);
+          
+          coortes.forEach(coorte => {
+            const nomeTrace = nomeExame.charAt(0).toUpperCase() + nomeExame.slice(1);
+            
+            // Lógica Individual
+            if (tipoGrafico === 'individual') {
+              const traceValor = { 
+                x: [], y: [], text: [], 
+                // --- PASSO DE ADIÇÃO (v11) ---
+                type: (tipoVisual === 'bar') ? 'bar' : 'scatter', // Usa 'scatter' para linhas/pontos
+                mode: (tipoVisual === 'bar') ? null : tipoVisual, // 'lines+markers'
+                // --- FIM DA ADIÇÃO ---
+                name: `${nomeTrace} (${coorte})`, hoverinfo: 'text' 
+              };
+              const traceMin = { x: [], y: [], mode: 'lines', name: `Ref. Mín (${coorte})`, line: { color: 'grey', dash: 'dash' }, showlegend: false, hoverinfo: 'none' };
+              const traceMax = { x: [], y: [], mode: 'lines', name: `Ref. Máx (${coorte})`, line: { color: 'grey', dash: 'dash' }, fill: 'tonexty', fillcolor: 'rgba(0,150,0,0.1)', showlegend: false, hoverinfo: 'none' };
+              
+              bucketsOrdenados.forEach(bucketId => {
+                traceValor.x.push(bucketId);
+                traceMin.x.push(bucketId);
+                traceMax.x.push(bucketId);
+                if (dadosDoExame[coorte][bucketId]) {
+                  const dadosDoPonto = dadosDoExame[coorte][bucketId][0]; 
+                  traceValor.y.push(dadosDoPonto.valor);
+                  traceMin.y.push(dadosDoPonto.refMin);
+                  traceMax.y.push(dadosDoPonto.refMax);
+                  traceValor.text.push(`<b>${coorte}</b><br>Data: ${dadosDoPonto.dataExame}<br>Valor: ${dadosDoPonto.valor}<br>Ref: ${dadosDoPonto.refMin}-${dadosDoPonto.refMax}`);
+                } else {
+                  traceValor.y.push(null); traceMin.y.push(null); traceMax.y.push(null); traceValor.text.push(null);
+                }
+              });
+              globalPlotlyTraces.push(traceMin, traceMax, traceValor);
+            
+            // Lógica de Média
+            } else {
+              const traceMedia = { 
+                x: [], y: [], text: [], 
+                // --- PASSO DE ADIÇÃO (v11) ---
+                type: (tipoVisual === 'bar') ? 'bar' : 'scatter', 
+                mode: (tipoVisual === 'bar') ? null : tipoVisual, 
+                // --- FIM DA ADIÇÃO ---
+                name: `${nomeTrace} (${coorte})`, hoverinfo: 'text' 
+              };
+              const traceUpper = { x: [], y: [], mode: 'lines', name: `Banda Sup. (${coorte})`, line: { width: 0 }, showlegend: false, hoverinfo: 'none' };
+              const traceLower = { x: [], y: [], mode: 'lines', name: `Banda Inf. (${coorte})`, line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(0,100,80,0.2)', showlegend: false, hoverinfo: 'none' };
+              
+              bucketsOrdenados.forEach(bucketId => {
+                traceMedia.x.push(bucketId);
+                traceUpper.x.push(bucketId);
+                traceLower.x.push(bucketId);
+                if (dadosDoExame[coorte][bucketId]) {
+                  const valoresDoBucket = dadosDoExame[coorte][bucketId].map(d => d.valor);
+                  const stats = calcularEstatisticas(valoresDoBucket);
+                  traceMedia.y.push(stats.media);
+                  if (bandaErro === 'dp' && stats.stdDev !== null) {
+                    traceUpper.y.push(stats.media + stats.stdDev);
+                    traceLower.y.push(stats.media - stats.stdDev);
+                  } else {
+                    traceUpper.y.push(stats.media);
+                    traceLower.y.push(stats.media);
+                  }
+                  traceMedia.text.push(`<b>${traceMedia.name}</b><br>Período: ${bucketId}<br>Média: ${stats.media.toFixed(2)}<br>DP: ±${stats.stdDev.toFixed(2)}<br>n = ${stats.n}`);
+                } else {
+                  traceMedia.y.push(null); traceUpper.y.push(null); traceLower.y.push(null); traceMedia.text.push(null);
+                }
+              });
+              globalPlotlyTraces.push(traceLower, traceUpper, traceMedia);
+            }
+          });
+        });
+
+        // 5. Define o Layout
+        globalPlotlyLayout = {
+          title: `Tendência: ${infoProjeto.medicamento}`,
+          xaxis: {
+            title: `Período (${agrupamento})`,
+            shapes: [{ // Linha Vermelha "Dia 0"
+              type: 'line', x0: 0, y0: 0, x1: 0, y1: 1,
+              yref: 'paper', line: { color: 'red', width: 2, dash: 'dash' }
+            }]
+          },
+          yaxis: { title: "Valor do Exame" },
+          hovermode: 'closest',
+          legend: { y: 1.1, orientation: 'h', traceorder: 'normal' },
+          // --- PASSO DE ADIÇÃO (v11) ---
+          // Se for gráfico de barras, muda o layout
+          barmode: (tipoVisual === 'bar') ? 'group' : 'overlay'
+          // --- FIM DA ADIÇÃO ---
+        };
+
+        // 6. Desenha o Gráfico
+        Plotly.newPlot('graficoPlotly', globalPlotlyTraces, globalPlotlyLayout);
+      }
+      
+      /**
+       * Função de Setup: Chamada uma vez ao carregar
+       */
+      function setupPainelDeControlo() {
+        // 1. Preenche os Checkboxes de Exames (Sua Ideia)
+        const examesContainer = document.getElementById('exames-checkbox-group');
+        const examesUnicos = [...new Set(globalRawData.map(row => row.nomeExame))];
+        examesContainer.innerHTML = '';
+        examesUnicos.sort().forEach((exame, index) => {
+          const nomeBonito = exame.charAt(0).toUpperCase() + exame.slice(1);
+          const isChecked = (index === 0) ? "checked" : ""; 
+          examesContainer.innerHTML += `
+            <label><input type="checkbox" name="exame" value="${exame}" ${isChecked}> ${nomeBonito}</label>
+          `;
+        });
+        
+        // 2. Configura o Slider de Idade (Sua Ideia)
+        const readout = document.getElementById('age-readout');
+        const slider = document.getElementById('age-slider');
+        const idades = globalRawData
+          .map(row => row.idadeEmDias)
+          .filter(idade => idade !== null && !isNaN(idade));
+        
+        if (idades.length > 0) {
+          minAge = Math.min(...idades);
+          maxAge = Math.max(...idades);
+          if (minAge === maxAge) maxAge += 1; 
+        } else {
+          minAge = 0;
+          maxAge = 100;
+        }
+        
+        globalAgeSlider = noUiSlider.create(slider, {
+            start: [minAge, maxAge], 
+            connect: true,
+            step: 1,
+            range: { 'min': minAge, 'max': maxAge },
+            tooltips: [true, true], 
+            format: {
+              to: value => Math.round(value),
+              from: value => Number(value)
+            }
+        });
+        
+        slider.noUiSlider.on('update', function (values) {
+            readout.innerHTML = `Faixa de idade (dias): <strong>${values[0]}</strong> - <strong>${values[1]}</strong>`;
+        });
+        
+        // 3. Define os valores pré-definidos (vindos do pop-up anterior)
+        document.getElementById('control-agrupamento').value = configPredefinida.agrupamento;
+        document.getElementById('control-tipografico').value = configPredefinida.tipoGrafico;
+        document.getElementById('control-divisaomedia').value = configPredefinida.divisaoMedia;
+        document.getElementById('control-bandaerro').value = configPredefinida.bandaErro;
+        
+        // 4. Desenha o gráfico pela primeira vez
+        desenharGrafico();
+      }
+      
+      // 5. Inicia tudo
+      window.addEventListener('load', setupPainelDeControlo);
+      
+    </script>
+  </body>
+</html>

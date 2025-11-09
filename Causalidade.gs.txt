@@ -1,0 +1,255 @@
+/**
+ * =============================================================
+ * MÓDULO 12: AVALIAÇÃO DE CAUSALIDADE (NARANJO)
+ * (v9 - Refatorado para aba 'FARMACOVIGILÂNCIA' dedicada)
+ * =============================================================
+ */
+
+/**
+ * FUNÇÃO 1: CHAMADA PELO MENU 'onOpen'
+ * Apenas MOSTRA a sidebar.
+ * (Esta função permanece igual)
+ */
+function abrirSidebarAvaliacao_UI() {
+  const html = HtmlService.createHtmlOutputFromFile('AvaliarRAM')
+    .setTitle('Avaliar Causalidade');
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * FUNÇÃO 2: CHAMADA PELA SIDEBAR (ao carregar)
+ * Pega os dados da linha ativa (da aba FARMACOVIGILÂNCIA) e envia para o HTML.
+ */
+function obterDadosParaAvaliacao() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const abaAtiva = ss.getActiveSheet();
+    const celulaAtiva = ss.getActiveCell();
+    
+    // 1. Verifica se estamos na aba 'FARMACOVIGILÂNCIA'
+    const nomeAbaAtiva = abaAtiva.getName().trim().toLowerCase();
+    const nomeAbaConfig = CONFIG.sheets.ramTab.trim().toLowerCase(); // <-- MUDANÇA
+
+    if (nomeAbaAtiva !== nomeAbaConfig) {
+      throw new Error("Por favor, selecione a linha da RAM que deseja avaliar na aba '" + CONFIG.sheets.ramTab + "'.");
+    }
+    
+    const linhaAtiva = celulaAtiva.getRow();
+    if (linhaAtiva < 2) {
+      throw new Error("Por favor, selecione uma linha de dados (não o cabeçalho).");
+    }
+    
+    const headers = abaAtiva.getRange(1, 1, 1, abaAtiva.getLastColumn()).getValues()[0];
+    const dadosLinha = abaAtiva.getRange(linhaAtiva, 1, 1, headers.length).getValues()[0];
+    
+    // 2. Pega os índices das colunas que precisamos
+    const idx = {
+      prontuario: headers.indexOf(CONFIG.headers.prontuario),
+      ramTipo: headers.indexOf(CONFIG.headers.ramTipo),
+      idEvento: headers.indexOf(CONFIG.headers.idEventoRam),
+      causalidade: headers.indexOf(CONFIG.headers.causalidadeRam)
+    };
+
+    if (idx.prontuario === -1 || idx.ramTipo === -1 || idx.idEvento === -1 || idx.causalidade === -1) {
+      throw new Error("Uma ou mais colunas de RAM (prontuario, ramTipo, idEventoRam, causalidadeRam) não foram encontradas no CONFIG ou na aba '" + CONFIG.sheets.ramTab + "'.");
+    }
+
+    const prontuario = dadosLinha[idx.prontuario];
+    const ramDescrita = dadosLinha[idx.ramTipo];
+
+    if (!ramDescrita) {
+      throw new Error("A linha selecionada não possui uma RAM registrada (a coluna '" + CONFIG.headers.ramTipo + "' está vazia).");
+    }
+    
+    // 3. A Lógica da Chave (ID_EVENTO_RAM)
+    let idEventoRam = dadosLinha[idx.idEvento];
+    if (!idEventoRam) {
+      idEventoRam = `RAM-${prontuario}-${new Date().getTime()}`;
+      abaAtiva.getRange(linhaAtiva, idx.idEvento + 1).setValue(idEventoRam);
+      Logger.log(`Novo ID de Evento RAM criado: ${idEventoRam} para Prontuário ${prontuario}`);
+    }
+
+    // 4. Buscar o medicamento suspeito
+    let medicamentoSuspeito = "N/D";
+    try {
+      medicamentoSuspeito = obterMedicamentoSuspeito_(prontuario);
+    } catch (e) {
+      Logger.log(e.message);
+    }
+    
+    // 5. Verifica se já existe uma avaliação salva (Lendo do DB Mestre)
+    const dadosSalvos = carregarDadosAvaliacao_(idEventoRam);
+
+    // 6. Retorna o objeto de dados para o HTML
+    return {
+      prontuario: prontuario,
+      ramDescrita: ramDescrita,
+      medicamentoSuspeito: medicamentoSuspeito,
+      idEventoRam: idEventoRam,
+      dadosSalvos: dadosSalvos 
+    };
+    
+  } catch (e) {
+    Logger.log("Erro em obterDadosParaAvaliacao: " + e.message);
+    return { error: e.message }; // Envia o erro para o HTML
+  }
+}
+
+/**
+ * FUNÇÃO 3: CHAMADA PELO BOTÃO "SALVAR" DA SIDEBAR
+ * (v9 - Salva no Mestre e de volta na aba FARMACOVIGILÂNCIA)
+ */
+function salvarAvaliacaoNaranjo(dadosFormulario) {
+  let causalidade = ""; 
+  let novaLinha = [];   
+  const nomeAbaMestre = "RAM_Causalidade_MESTRE"; 
+
+  try {
+    // 1. Calcular o Escore
+    let escore = 0;
+    escore += parseInt(dadosFormulario.Q1_RELATOS_PREVIOS);
+    escore += parseInt(dadosFormulario.Q2_TEMPO);
+    escore += parseInt(dadosFormulario.Q3_SUSPENSAO);
+    escore += parseInt(dadosFormulario.Q4_READMINISTRACAO);
+    escore += parseInt(dadosFormulario.Q5_CAUSAS_ALTERNATIVAS);
+    escore += parseInt(dadosFormulario.Q6_PLACEBO);
+    escore += parseInt(dadosFormulario.Q7_NIVEL_TOXICO);
+    escore += parseInt(dadosFormulario.Q8_DOSE);
+    escore += parseInt(dadosFormulario.Q9_HISTORIA_PREVIA);
+    escore += parseInt(dadosFormulario.Q10_CONFIRMACAO_OBJETIVA);
+    
+    // 2. Definir Causalidade
+    if (escore >= 9) causalidade = "Definida";
+    else if (escore >= 5) causalidade = "Provável";
+    else if (escore >= 1) causalidade = "Possível";
+    else causalidade = "Duvidosa";
+    
+    // 3. Salvar no Banco de Dados MESTRE
+    const masterDB = SpreadsheetApp.openById(MASTER_DB_SHEET_ID);
+    const masterSheet = masterDB.getSheetByName(nomeAbaMestre); 
+    if (!masterSheet) throw new Error(`Aba '${nomeAbaMestre}' não encontrada no Banco de Dados Mestre.`);
+    
+    const headers = masterSheet.getRange(1, 1, 1, masterSheet.getLastColumn()).getValues()[0];
+    novaLinha = headers.map(header => {
+      if (header === "ESCORE_FINAL") return escore;
+      if (header === "CAUSALIDADE") return causalidade;
+      return dadosFormulario[header]; 
+    });
+    
+    const data = masterSheet.getDataRange().getValues();
+    const idxIdEvento = headers.indexOf("ID_EVENTO_RAM");
+    let linhaEncontrada = -1;
+    for (let i = 1; i < data.length; i++) { 
+      if (data[i][idxIdEvento] === dadosFormulario.idEventoRam) {
+        linhaEncontrada = i + 1; 
+        break;
+      }
+    }
+    if (linhaEncontrada > 0) {
+      masterSheet.getRange(linhaEncontrada, 1, 1, novaLinha.length).setValues([novaLinha]);
+      Logger.log("Avaliação ATUALIZADA (Mestre) para " + dadosFormulario.idEventoRam);
+    } else {
+      masterSheet.appendRow(novaLinha);
+      Logger.log("Nova avaliação SALVA (Mestre) para " + dadosFormulario.idEventoRam);
+    }
+    
+    // 4. Salvar a causalidade final de volta na aba 'FARMACOVIGILÂNCIA' local
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const abaRam = ss.getSheetByName(CONFIG.sheets.ramTab); // <-- MUDANÇA
+    const headersRam = abaRam.getRange(1, 1, 1, abaRam.getLastColumn()).getValues()[0];
+    const idxIdEventoRam = headersRam.indexOf(CONFIG.headers.idEventoRam);
+    const idxCausalidadeRam = headersRam.indexOf(CONFIG.headers.causalidadeRam);
+    
+    const dadosRam = abaRam.getDataRange().getValues();
+    let linhaParaSalvar = -1;
+    
+    for (let i = 1; i < dadosRam.length; i++) {
+      if (dadosRam[i][idxIdEventoRam] === dadosFormulario.idEventoRam) {
+        linhaParaSalvar = i + 1;
+        break;
+      }
+    }
+    
+    if (linhaParaSalvar > 0) {
+      abaRam.getRange(linhaParaSalvar, idxCausalidadeRam + 1).setValue(causalidade);
+      Logger.log(`Causalidade '${causalidade}' salva de volta na aba '${CONFIG.sheets.ramTab}', linha ${linhaParaSalvar}.`);
+    } else {
+      Logger.log("ERRO CRÍTICO: Não foi possível encontrar o ID_EVENTO_RAM " + dadosFormulario.idEventoRam + " de volta na aba '" + CONFIG.sheets.ramTab + "'.");
+    }
+    
+    return { sucesso: true, causalidade: causalidade };
+    
+  } catch (e) {
+    Logger.log("ERRO FATAL em salvarAvaliacaoNaranjo: " + e.message + "\nStack: " + e.stack);
+    throw e;
+  }
+}
+
+
+/**
+ * HELPER: Procura no DB MESTRE se já existe uma avaliação para este ID.
+ * (Esta função permanece igual - 100% Remota)
+ */
+function carregarDadosAvaliacao_(idEventoRam) {
+  try {
+    Logger.log("Acessando DB Mestre para carregar avaliação: " + idEventoRam);
+    const masterDB = SpreadsheetApp.openById(MASTER_DB_SHEET_ID);
+    const masterSheet = masterDB.getSheetByName("RAM_Causalidade_MESTRE");
+    if (!masterSheet) {
+       Logger.log("Aba 'RAM_Causalidade_MESTRE' não encontrada no DB Mestre. Assumindo 'null'.");
+       return null;
+    }
+
+    const data = masterSheet.getDataRange().getValues();
+    const headers = data.shift(); 
+    const idxIdEvento = headers.indexOf("ID_EVENTO_RAM");
+
+    if (idxIdEvento === -1) {
+       Logger.log("Coluna 'ID_EVENTO_RAM' não encontrada no DB Mestre. Assumindo 'null'.");
+       return null; 
+    }
+
+    for (const row of data) {
+      if (row[idxIdEvento] === idEventoRam) {
+        const dadosSalvos = {};
+        headers.forEach((header, i) => {
+          dadosSalvos[header] = row[i];
+        });
+        Logger.log("Carregando avaliação existente do DB Mestre para " + idEventoRam);
+        return dadosSalvos;
+      }
+    }
+    Logger.log("Nenhuma avaliação encontrada no DB Mestre para " + idEventoRam);
+    return null; 
+    
+  } catch (e) {
+    Logger.log("Erro ao carregar dados do DB Mestre: " + e.message);
+    return null;
+  }
+}
+
+
+/**
+ * HELPER: Tenta encontrar o medicamento que o paciente está usando.
+ * (Esta função permanece igual)
+ */
+function obterMedicamentoSuspeito_(prontuario) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.sheets.prescricao);
+  if (!sheet) throw new Error("Aba 'Prescrição' não encontrada para buscar medicamento.");
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data.shift();
+  const idxPront = headers.indexOf(CONFIG.headers.prontuario);
+  const idxMed = headers.indexOf(CONFIG.headers.medicamento);
+  
+  if (idxPront === -1 || idxMed === -1) throw new Error("Colunas 'Prontuário' ou 'Medicamento' não encontradas na aba 'Prescrição'.");
+  
+  for (const row of data) {
+    if (row[idxPront] == prontuario) {
+      return row[idxMed]; // Retorna o primeiro medicamento que encontrar
+    }
+  }
+  return "Medicamento não encontrado";
+}

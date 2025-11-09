@@ -1,0 +1,261 @@
+/**
+ * =============================================================
+ * MÓDULO 14: ANALISADOR DE CUSTO-EFETIVIDADE
+ * (v1 - Baseado em pop-up dinâmico)
+ * =============================================================
+ */
+
+/**
+ * FUNÇÃO 1: Abre o pop-up "Wizard" de Análise de Custo-Efetividade.
+ */
+function abrirModalCustoEfetividade() {
+  const html = HtmlService.createHtmlOutputFromFile('AnaliseCusto')
+    .setWidth(800)  // Largura do pop-up
+    .setHeight(700); // Altura do pop-up
+    
+  SpreadsheetApp.getUi().showModalDialog(html, 'Wizard de Custo-Efetividade');
+}
+
+/**
+ * FUNÇÃO 2: Helper chamado pelo HTML para listar colunas de uma aba.
+ * @param {string} nomeAba - O nome da aba de prescrição selecionada.
+ * @return {string[]} Lista de cabeçalhos.
+ */
+function obterColunasDaAba(nomeAba) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(nomeAba);
+    if (!sheet) return [];
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    return headers.filter(h => h); // Retorna apenas cabeçalhos não-vazios
+  } catch (e) {
+    Logger.log("Erro em obterColunasDaAba: " + e.message);
+    return ["Erro: " + e.message];
+  }
+}
+
+/**
+ * FUNÇÃO 3: Helper chamado pelo HTML para encontrar os grupos (ex: "Marca A", "Marca B").
+ * @param {string} nomeAba - O nome da aba de prescrição selecionada.
+ * @param {string} nomeColuna - O nome da coluna de agrupamento (ex: "FABRICANTE").
+ * @return {string[]} Lista de grupos únicos.
+ */
+function obterGruposDeComparacao(nomeAba, nomeColuna) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(nomeAba);
+    if (!sheet) throw new Error("Aba '" + nomeAba + "' não encontrada.");
+    
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const idxColuna = headers.indexOf(nomeColuna);
+    
+    if (idxColuna === -1) {
+      throw new Error("Coluna '" + nomeColuna + "' não encontrada na aba '" + nomeAba + "'.");
+    }
+    
+    const data = sheet.getRange(2, idxColuna + 1, sheet.getLastRow() - 1, 1).getValues();
+    const gruposUnicos = [...new Set(data.map(row => row[0]))].filter(g => g); // Filtra, remove duplicados e vazios
+    
+    Logger.log(`Grupos encontrados na coluna '${nomeColuna}': ${gruposUnicos.join(', ')}`);
+    return gruposUnicos.sort();
+    
+  } catch (e) {
+    Logger.log("Erro em obterGruposDeComparacao: " + e.message);
+    throw e;
+  }
+}
+
+/**
+ * FUNÇÃO 4 (PRINCIPAL): Executa a análise de Custo-Efetividade.
+ * Chamada pelo pop-up 'AnaliseCusto.html'
+ */
+function gerarAnaliseCustoEfetividade(opcoes) {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  Logger.log(`Iniciando 'gerarAnaliseCustoEfetividade' para ${opcoes.medicamentoAlvo}`);
+  
+  try {
+    // --- 1. Ler Todos os Mapas e Dados (Uma única vez) ---
+    const patientMap = buildPatientMap_(); // Do Utils.gs
+    
+    // Dados de Prescrição (Aba especializada)
+    const prescricaoSheet = ss.getSheetByName(opcoes.abaPrescricao);
+    if (!prescricaoSheet) throw new Error("Aba '" + opcoes.abaPrescricao + "' não encontrada.");
+    const prescricaoData = prescricaoSheet.getDataRange().getValues();
+    const hPresc = prescricaoData.shift();
+    const idxPront = hPresc.indexOf(CONFIG.headers.prontuario);
+    const idxDataInicio = hPresc.indexOf(CONFIG.headers.dataInicio);
+    const idxDataFim = hPresc.indexOf(CONFIG.headers.dataFim); // <-- LÊ DATA_FIM
+    const idxMed = hPresc.indexOf(CONFIG.headers.medicamento);
+    const idxGrupo = hPresc.indexOf(opcoes.colunaAgrupadora); // ex: FABRICANTE
+
+    if (idxPront === -1 || idxDataInicio === -1 || idxDataFim === -1 || idxMed === -1 || idxGrupo === -1) {
+      throw new Error(`A aba '${opcoes.abaPrescricao}' precisa das colunas (verifique CONFIG): '${CONFIG.headers.prontuario}', '${CONFIG.headers.dataInicio}', '${CONFIG.headers.dataFim}', '${CONFIG.headers.medicamento}' e '${opcoes.colunaAgrupadora}'.`);
+    }
+
+    // Dados de Eficácia (Exames)
+    const examesSheet = ss.getSheetByName(CONFIG.sheets.exames);
+    if (!examesSheet) throw new Error("Aba '" + CONFIG.sheets.exames + "' não encontrada.");
+    const examesData = examesSheet.getDataRange().getValues();
+    const hExames = examesData.shift();
+    const idxExamePront = hExames.indexOf(CONFIG.headers.prontuario);
+    const idxExameNome = hExames.indexOf(CONFIG.headers.exameNome);
+    const idxExameAnalise = hExames.indexOf(CONFIG.headers.exameAnalise);
+    const nomeExameAlvo = opcoes.eficacia.exame.trim().toLowerCase();
+    
+    // Dados de Segurança (RAMs)
+    const ramSheet = ss.getSheetByName(CONFIG.sheets.ramTab);
+    if (!ramSheet) throw new Error("Aba '" + CONFIG.sheets.ramTab + "' não encontrada.");
+    const ramData = ramSheet.getDataRange().getValues();
+    const hRam = ramData.shift();
+    const idxRamPront = hRam.indexOf(CONFIG.headers.prontuario);
+    const idxRamGravidade = hRam.indexOf(CONFIG.headers.ramGravidade);
+
+    // --- 2. Processar Dados por Paciente ---
+    // Estrutura: { "prontuario": { grupo: "Marca A", custo: 1500, eficacia: true, risco: false } }
+    const pacientesProcessados = {};
+
+    // A. Calcular Custo (Sua ideia)
+    const pacientesComCusto = {}; // { "prontuario": { grupo: "Marca A", dias: 30 } }
+    prescricaoData.forEach(row => {
+      const prontuario = String(row[idxPront] || "").trim();
+      if (!prontuario) return;
+      
+      const medicamento = row[idxMed];
+      const grupo = row[idxGrupo]; // ex: "Marca A"
+      
+      // Filtra pelo medicamento (se selecionado) E se o grupo é um dos que estamos a simular
+      if ((!opcoes.medicamentoAlvo || medicamento === opcoes.medicamentoAlvo) &&
+          opcoes.custosSimulados[grupo]) {
+            
+        const dataInicio = new Date(row[idxDataInicio]);
+        const dataFim = new Date(row[idxDataFim]);
+        
+        if (isNaN(dataInicio.getTime()) || isNaN(dataFim.getTime())) return;
+        
+        const dias = (dataFim - dataInicio) / (1000 * 60 * 60 * 24) + 1; // +1 para ser inclusivo
+        
+        if (!pacientesComCusto[prontuario]) {
+          pacientesComCusto[prontuario] = { grupo: grupo, dias: 0 };
+        }
+        pacientesComCusto[prontuario].dias += dias;
+      }
+    });
+
+    // B. Calcular Eficácia
+    const pacientesEficazes = new Set();
+    if (opcoes.eficacia.exame) {
+      examesData.forEach(row => {
+        const prontuario = String(row[idxExamePront] || "").trim();
+        const nomeExame = String(row[idxExameNome] || "").trim().toLowerCase();
+        const analise = row[idxExameAnalise];
+        
+        if (nomeExame === nomeExameAlvo && analise === opcoes.eficacia.analise) {
+          pacientesEficazes.add(prontuario);
+        }
+      });
+    }
+
+    // C. Calcular Risco
+    const pacientesComRisco = new Set();
+    if (opcoes.risco.gravidade) {
+      ramData.forEach(row => {
+        const prontuario = String(row[idxRamPront] || "").trim();
+        const gravidade = row[idxRamGravidade];
+        
+        if (opcoes.risco.gravidade === "qualquer" && gravidade) {
+          pacientesComRisco.add(prontuario);
+        } else if (gravidade === opcoes.risco.gravidade) { // ex: "Grave/Séria"
+          pacientesComRisco.add(prontuario);
+        }
+      });
+    }
+
+    // --- 3. Juntar Tudo e Agregar por Grupo ---
+    // Estrutura: { "Marca A": { n: 0, somaCusto: 0, totalEficaz: 0, totalRisco: 0 } }
+    const agregador = {};
+    Object.keys(opcoes.custosSimulados).forEach(grupo => {
+      agregador[grupo] = { n: 0, somaCusto: 0, totalEficaz: 0, totalRisco: 0 };
+    });
+
+    Object.keys(pacientesComCusto).forEach(prontuario => {
+      const dados = pacientesComCusto[prontuario];
+      const grupo = dados.grupo;
+      
+      agregador[grupo].n++;
+      agregador[grupo].somaCusto += dados.dias * opcoes.custosSimulados[grupo]; // Custo Simulado!
+      
+      if (pacientesEficazes.has(prontuario)) {
+        agregador[grupo].totalEficaz++;
+      }
+      if (pacientesComRisco.has(prontuario)) {
+        agregador[grupo].totalRisco++;
+      }
+    });
+
+    // --- 4. Preparar Dados para a Tabela de Relatório e Gráfico Plotly ---
+    const dadosTabela = [["Grupo", "N (Pacientes)", "Custo Médio (R$)", "% Eficácia", "% Risco (RAMs)"]];
+    const plotlyData = {
+      titulo: `Plano de Custo-Efetividade: ${opcoes.medicamentoAlvo || 'Todos'}`,
+      eixoX: `% Eficácia (Exame: ${opcoes.eficacia.exame || 'N/D'})`,
+      eixoY: `Custo Médio Simulado (R$)`,
+      traces: []
+    };
+
+    Object.keys(agregador).forEach(grupo => {
+      const data = agregador[grupo];
+      if (data.n === 0) return; // Pula grupos sem pacientes
+      
+      const custoMedio = data.somaCusto / data.n;
+      const percEficaz = (data.totalEficaz / data.n) * 100;
+      const percRisco = (data.totalRisco / data.n) * 100;
+      
+      dadosTabela.push([
+        grupo,
+        data.n,
+        custoMedio.toFixed(2),
+        percEficaz.toFixed(1),
+        percRisco.toFixed(1)
+      ]);
+      
+      // Prepara o gráfico de dispersão (scatter plot)
+      plotlyData.traces.push({
+        x: [percEficaz],
+        y: [custoMedio],
+        mode: 'markers+text',
+        name: grupo,
+        text: [`<b>${grupo}</b><br>Custo: R$ ${custoMedio.toFixed(2)}<br>Eficácia: ${percEficaz.toFixed(1)}%<br>Risco: ${percRisco.toFixed(1)}%`],
+        textposition: 'top center',
+        marker: { size: 12 }
+      });
+    });
+
+    // --- 5. Gerar Relatório e Gráfico ---
+    const nomeRelatorio = `Análise Custo-Efetividade`;
+    let reportSheet = ss.getSheetByName(nomeRelatorio);
+    if (reportSheet) reportSheet.clear();
+    else reportSheet = ss.insertSheet(nomeRelatorio);
+    ss.setActiveSheet(reportSheet);
+
+    reportSheet.getRange("B1").setValue("Relatório de Custo-Efetividade Simulado").setFontWeight("bold").setFontSize(16);
+    reportSheet.getRange(4, 2, dadosTabela.length, dadosTabela[0].length).setValues(dadosTabela);
+    reportSheet.autoResizeColumns(2, dadosTabela[0].length);
+
+    // Abre o gráfico Plotly.js
+    const template = HtmlService.createTemplateFromFile("GraficoInterativo.html");
+    template.dadosDoGrafico = JSON.stringify(plotlyData);
+    const htmlOutput = template.evaluate()
+      .setWidth(1000)
+      .setHeight(650);
+      
+    ui.showModalDialog(htmlOutput, `Gráfico Interativo: Custo-Efetividade`);
+
+    return "Sucesso";
+
+  } catch (e) {
+    Logger.log("ERRO FATAL em gerarAnaliseCustoEfetividade: " + e.message + "\nStack: " + e.stack);
+    ui.alert("Erro no Script", "Ocorreu um erro: " + e.message, ui.ButtonSet.OK);
+    throw e; 
+  }
+}

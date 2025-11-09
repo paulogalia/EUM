@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    :root {
+      --cor-primaria: #005a9c;
+      --cor-primaria-hover: #004a80;
+      --cor-fundo-app: #f4f7f6;
+      --cor-fundo-card: #ffffff;
+      --cor-borda: #e0e0e0;
+      --cor-texto-titulo: #1f1f1f;
+      --cor-texto-corpo: #444;
+      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --border-radius: 8px;
+    }
+    body, html {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: var(--cor-fundo-app);
+      color: var(--cor-texto-corpo);
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr auto;
+      gap: 24px;
+      padding: 32px;
+      height: calc(100vh - 64px);
+    }
+    .header {
+      grid-column: 1 / -1;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--cor-borda);
+    }
+    .footer {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--cor-borda);
+      padding-top: 20px;
+    }
+    .coluna-esquerda { grid-column: 1 / 2; }
+    .coluna-direita { grid-column: 2 / 3; }
+    h3 {
+      font-size: 1.9em;
+      font-weight: 700;
+      color: var(--cor-primaria); /* Título Azul */
+      margin: 0 0 4px 0;
+      text-align: center;
+    }
+    .header p {
+      font-size: 1.1em;
+      margin-top: 0;
+      text-align: center;
+    }
+    .block {
+      background-color: var(--cor-fundo-card);
+      padding: 24px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--sombra-card);
+      margin-bottom: 24px;
+      height: 100%;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+    .label {
+      font-size: 1.1em;
+      font-weight: 600;
+      color: var(--cor-texto-titulo);
+      margin-bottom: 12px;
+      display: block;
+    }
+    select {
+      width: 100%;
+      padding: 12px;
+      font-size: 1em;
+      border: 1px solid var(--cor-borda);
+      border-radius: 6px;
+      background-color: #fff;
+    }
+    button.action {
+      font-size: 1.1em;
+      font-weight: bold;
+      color: #fff;
+      background-color: var(--cor-primaria);
+      border: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      float: right;
+      transition: all 0.2s ease;
+    }
+    button.action:hover {
+      background-color: var(--cor-primaria-hover);
+      box-shadow: 0 4px 10px rgba(0, 90, 156, 0.3);
+    }
+    button.action:active {
+      transform: scale(0.98);
+    }
+    #loading, #error { 
+      margin-top: 15px; 
+      display: none;
+    }
+    #error { color: #dc3545; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h3>Análise de Tendência Interativa</h3>
+      <p>Passo 1: Selecione a população e o tipo de análise.</p>
+    </div>
+    
+    <div class="coluna-esquerda">
+      <div class="block">
+        <label class="label">1. População-Alvo</label>
+        
+        <label for="select-medicamento" class="label" style="font-size: 1em; margin-bottom: 5px;">Medicamento (Intervenção):</label>
+        <select id="select-medicamento" class="form-control">
+          <option value="" disabled selected>Carregando...</option>
+        </select>
+        
+        <label for="filtro-sexo" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Sexo:</label>
+        <select id="filtro-sexo" class="form-control">
+          <option value="todos">Todos</option>
+          <option value="M">Apenas Masculino</option>
+          <option value="F">Apenas Feminino</option>
+        </select>
+        
+        <label for="filtro-prematuridade" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Prematuridade:</label>
+        <select id="filtro-prematuridade" class="form-control">
+          <option value="todos">Todos</option>
+          <option value="prematuro">Apenas Prematuros</option>
+          <option value="padrao">Apenas A Termo/Padrão</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="coluna-direita">
+      <div class="block">
+        <label class="label">2. Opções de Análise</label>
+        
+        <label for="select-agrupamento" class="label" style="font-size: 1em; margin-bottom: 5px;">Agrupar tempo por:</label>
+        <select id="select-agrupamento" class="form-control">
+          <option value="semana">Semana</option>
+          <option value="dia">Dia</option>
+          <option value="mes">Mês</option>
+        </select>
+        
+        <label for="control-tipografico" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Tipo de Gráfico:</label>
+        <select id="control-tipografico" class="form-control">
+            <option value="media">Média da Coorte</option>
+            <option value="individual">Linhas de Pacientes Individuais</option>
+        </select>
+
+        <label for="select-divisao" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Dividir Média por:</label>
+        <select id="select-divisao" class="form-control">
+          <option value="todos">Média Total (1 linha)</option>
+          <option value="SEXO">Sexo (M vs. F)</option>
+          <option value="IDADE GESTACIONAL">Prematuridade (Prematuro vs. Padrão)</option>
+        </select>
+
+        <label for="control-bandaerro" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Banda de Erro (para Média):</label>
+        <select id="control-bandaerro" class="form-control">
+          <option value="nenhuma">Nenhuma</option>
+          <option value="dp" selected>Desvio Padrão (±DP)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="action" onclick="iniciarAnalise()">Carregar Laboratório de Análise</button>
+      <div id="loading"><p>A recolher todos os dados... Isto pode demorar alguns segundos.</p></div>
+      <div id="error"></div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('load', function() {
+      google.script.run
+        .withSuccessHandler(popularDropdown)
+        .withFailureHandler(mostrarErro)
+        .obterListaDeMedicamentosUnicos(); // (Esta função está no Analise.gs)
+    });
+
+    function popularDropdown(medicamentos) {
+      const select = document.getElementById('select-medicamento');
+      select.innerHTML = '';
+      if (medicamentos.length === 0) {
+        select.innerHTML = '<option disabled selected>Nenhum medicamento encontrado</option>';
+        return;
+      }
+      select.innerHTML = '<option value="" disabled selected>-- Selecione um medicamento --</option>';
+      medicamentos.forEach(function(med) {
+        const option = document.createElement('option');
+        option.value = med;
+        option.textContent = med;
+        select.appendChild(option);
+      });
+    }
+
+    function iniciarAnalise() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+
+      const medSelecionado = document.getElementById('select-medicamento').value;
+      
+      if (!medSelecionado) {
+        mostrarErro({ message: "Por favor, selecione um medicamento." });
+        return;
+      }
+      
+      // O objeto de opções agora é "passo 1"
+      const opcoes = {
+        medicamento: medSelecionado,
+        filtrosPop: {
+          sexo: document.getElementById('filtro-sexo').value,
+          prematuridade: document.getElementById('filtro-prematuridade').value
+        },
+        // O "passo 2" (controlos do gráfico) é enviado diretamente
+        // para o laboratório guardar as predefinições.
+        configGrafico: {
+          agrupamento: document.getElementById('select-agrupamento').value,
+          tipoGrafico: document.getElementById('control-tipografico').value,
+          divisaoMedia: document.getElementById('select-divisao').value,
+          bandaErro: document.getElementById('control-bandaerro').value
+        }
+      };
+
+      google.script.run
+        .withSuccessHandler(analiseCompleta)
+        .withFailureHandler(mostrarErro)
+        .recolherDadosParaLaboratorio(opcoes); // <-- Chama o "motor"
+    }
+
+    function analiseCompleta(mensagem) {
+      document.getElementById('loading').style.display = 'none';
+      google.script.host.close();
+    }
+
+    function mostrarErro(erro) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').textContent = 'Erro: ' + erro.message;
+    }
+  </script>
+</body>
+</html>

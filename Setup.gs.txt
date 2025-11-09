@@ -1,0 +1,270 @@
+/**
+ * =============================================================
+ * MÓDULO 1: SETUP E ONBOARDING (O "Wizard" do EUM)
+ * (v2 - Fluxo de 3 Páginas)
+ * =============================================================
+ */
+
+/**
+ * FUNÇÃO 1: (Chamada pelo Menu) Abre a "Página 1: Boas-vindas"
+ * (Esta função permanece a mesma)
+ */
+function abrirWizardBoasVindas() {
+  const html = HtmlService.createHtmlOutputFromFile('BoasVindas.html')
+    .setWidth(800)  
+    .setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Bem-vindo à Ferramenta de Análise de EUM');
+}
+
+/**
+ * FUNÇÃO 2: (Chamada pela "Página 1") Abre a "Página 2: Setup Menu Principal"
+ * (Substitui a antiga 'irParaConfiguracaoAbas')
+ */
+function irParaSetupMenuPrincipal() {
+  const html = HtmlService.createHtmlOutputFromFile('ConfigurarMenuPrincipal.html')
+    .setWidth(700)
+    .setHeight(550); // Altura para a Página 2
+  SpreadsheetApp.getUi().showModalDialog(html, 'Assistente de Configuração - Passo 1');
+}
+
+/**
+ * FUNÇÃO 3: (Chamada pela "Página 2") Cria a aba 'MENU PRINCIPAL'.
+ * (A sua nova ideia de script)
+ */
+function executarSetupMenuPrincipal() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const nomeAba = CONFIG.sheets.tabelaResumo; // "MENU PRINCIPAL"
+  
+  try {
+    let sheet = ss.getSheetByName(nomeAba);
+    if (sheet) {
+      Logger.log("Aba '" + nomeAba + "' já existe. Apenas formatando.");
+    } else {
+      sheet = ss.insertSheet(nomeAba);
+      Logger.log("Aba '" + nomeAba + "' criada.");
+    }
+    
+    // Os 5 cabeçalhos que você pediu:
+    const headers = [
+      CONFIG.headers.nomePaciente,
+      CONFIG.headers.prontuario,
+      CONFIG.headers.dataNascimento,
+      CONFIG.headers.sexo,
+      CONFIG.headers.gestacao
+    ];
+    
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers])
+      .setFontWeight("bold")
+      .setBackground("#d9ead3") // Um verde claro para a aba principal
+      .setBorder(true, true, true, true, true, true);
+      
+    sheet.setFrozenRows(1);
+    sheet.autoResizeColumns(1, headers.length);
+    ss.setActiveSheet(sheet);
+    
+    return "Sucesso";
+    
+  } catch (e) {
+    Logger.log("Erro em executarSetupMenuPrincipal: " + e.message);
+    throw new Error("Erro ao criar aba 'MENU PRINCIPAL': " + e.message);
+  }
+}
+
+/**
+ * FUNÇÃO 4: (Chamada pela "Página 2") Abre a "Página 3: Escolher Módulos"
+ */
+function irParaEscolherModulos() {
+  const html = HtmlService.createHtmlOutputFromFile('ConfigurarProjeto.html')
+    .setWidth(700)
+    .setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Assistente de Configuração - Passo 2');
+}
+
+
+/**
+ * FUNÇÃO 5: (Chamada pela "Página 3") O motor que cria as abas.
+ * (Esta é a sua antiga 'executarSetupProjeto')
+ */
+function executarSetupProjeto(modulos) {
+  const ui = SpreadsheetApp.getUi();
+  let logSucesso = ["Setup concluído!"];
+  let logErros = [];
+
+  try {
+    // --- MÓDULO DE EXAMES ---
+    if (modulos.includes('exames')) {
+      try {
+        Logger.log("Executando setup de Exames...");
+        importarRegrasDeExames_(); 
+        setupAbaExames_(); 
+        logSucesso.push("✅ Módulo de Exames configurado.");
+      } catch (e) {
+        logErros.push("❌ Erro ao configurar Exames: " + e.message);
+      }
+    }
+    
+    // --- MÓDULO DE FARMACOVIGILÂNCIA ---
+    if (modulos.includes('ram')) {
+      try {
+        Logger.log("Executando setup de Farmacovigilância...");
+        setupAbaFarmacovigilancia_(); 
+        logSucesso.push("✅ Módulo de Farmacovigilância configurado.");
+      } catch (e) {
+        logErros.push("❌ Erro ao configurar RAMs: " + e.message);
+      }
+    }
+    
+    // --- MÓDULO DE CUSTO-EFETIVIDADE ---
+    if (modulos.includes('custo')) {
+       try {
+        Logger.log("Executando setup de Custo-Efetividade...");
+        setupAbaCustoEfetividade_(); 
+        logSucesso.push("✅ Módulo de Custo-Efetividade configurado.");
+      } catch (e) {
+        logErros.push("❌ Erro ao configurar Custo: " + e.message);
+      }
+    }
+    
+    let msgFinal = logSucesso.join('\n');
+    if (logErros.length > 0) {
+      msgFinal += "\n\nAvisos:\n" + logErros.join('\n');
+    }
+    
+    ui.alert("Configuração Concluída", msgFinal, ui.ButtonSet.OK);
+    return "Sucesso";
+
+  } catch (e) {
+    Logger.log("ERRO FATAL em executarSetupProjeto: " + e.message);
+    ui.alert("Erro Crítico", "Ocorreu um erro: " + e.message, ui.ButtonSet.OK);
+  }
+}
+
+// =============================================================
+// HELPERS DE SETUP (As funções antigas, agora privadas com "_")
+// (Estas funções permanecem as mesmas)
+// =============================================================
+
+function importarRegrasDeExames_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const nomeAba = CONFIG.sheets.examesRef;
+  Logger.log("Importando regras para '" + nomeAba + "'...");
+  
+  const dbSpreadsheet = SpreadsheetApp.openById(MASTER_DB_SHEET_ID);
+  const dbSheet = dbSpreadsheet.getSheetByName(nomeAba);
+  if (!dbSheet) throw new Error("Aba '" + nomeAba + "' não encontrada no DB Mestre.");
+  
+  const dbData = dbSheet.getDataRange().getValues();
+  let targetSheet = ss.getSheetByName(nomeAba);
+  if (targetSheet) ss.deleteSheet(targetSheet);
+  
+  targetSheet = ss.insertSheet(nomeAba);
+  targetSheet.getRange(1, 1, dbData.length, dbData[0].length).setValues(dbData);
+  
+  targetSheet.getRange(1, 1, 1, dbData[0].length).setFontWeight("bold").setBackground("#f3f3f3");
+  targetSheet.setFrozenRows(1);
+  targetSheet.autoResizeColumns(1, dbData[0].length);
+  Logger.log("Regras de Exames importadas.");
+}
+
+function setupAbaExames_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const nomeAbaExames = CONFIG.sheets.exames;
+  const nomeAbaRef = CONFIG.sheets.examesRef;
+  const nomeAbaTabela = CONFIG.sheets.tabelaResumo;
+  
+  const refSheet = ss.getSheetByName(nomeAbaRef);
+  const tabelaSheet = ss.getSheetByName(nomeAbaTabela);
+  if (!refSheet || !tabelaSheet) throw new Error("Abas '" + nomeAbaRef + "' ou '" + nomeAbaTabela + "' não encontradas.");
+
+  const headersRef = refSheet.getRange(1, 1, 1, refSheet.getLastColumn()).getValues()[0];
+  const idxNomeExameRef = headersRef.indexOf(CONFIG.headers.exameRefNome);
+  const allNames = refSheet.getDataRange().getValues().slice(1).map(row => row[idxNomeExameRef]);
+  const uniqueNames = [...new Set(allNames)].filter(name => name).sort();
+  if (uniqueNames.length === 0) throw new Error("Nenhum exame encontrado em '" + nomeAbaRef + "'.");
+  
+  const headersTabela = tabelaSheet.getRange(1, 1, 1, tabelaSheet.getLastColumn()).getValues()[0];
+  const idxProntuarioTabela = headersTabela.indexOf(CONFIG.headers.prontuario);
+  const allProntuarios = tabelaSheet.getDataRange().getValues().slice(1).map(row => row[idxProntuarioTabela]);
+  const uniqueProntuarios = [...new Set(allProntuarios)].filter(p => p);
+  if (uniqueProntuarios.length === 0) throw new Error("Nenhum prontuário encontrado em '" + nomeAbaTabela + "'.");
+
+  let examesSheet = ss.getSheetByName(nomeAbaExames);
+  if (examesSheet) {
+    examesSheet.clearFormats();
+    examesSheet.clearDataValidations();
+  } else {
+    examesSheet = ss.insertSheet(nomeAbaExames);
+  }
+
+  const headers = [
+    CONFIG.headers.prontuario, CONFIG.headers.exameData, CONFIG.headers.exameNome,
+    CONFIG.headers.exameValor, CONFIG.headers.exameAnalise,
+    CONFIG.headers.exameRefMin, CONFIG.headers.exameRefMax
+  ];
+  const headerRange = examesSheet.getRange(1, 1, 1, headers.length);
+  headerRange.setValues([headers]).setFontWeight("bold").setBackground("#cfe2f3").setBorder(true, true, true, true, true, true);
+  examesSheet.setFrozenRows(1);
+
+  const prontuarioRule = SpreadsheetApp.newDataValidation().requireValueInList(uniqueProntuarios).setAllowInvalid(false).build();
+  examesSheet.getRange(2, headers.indexOf(CONFIG.headers.prontuario) + 1, examesSheet.getMaxRows() - 1, 1).setDataValidation(prontuarioRule);
+  
+  const exameRule = SpreadsheetApp.newDataValidation().requireValueInList(uniqueNames).setAllowInvalid(false).build();
+  examesSheet.getRange(2, headers.indexOf(CONFIG.headers.exameNome) + 1, examesSheet.getMaxRows() - 1, 1).setDataValidation(exameRule);
+  
+  examesSheet.autoResizeColumns(1, headers.length);
+  Logger.log("Aba 'Exames' configurada.");
+}
+
+function setupAbaFarmacovigilancia_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const nomeAba = CONFIG.sheets.ramTab;
+  let sheet = ss.getSheetByName(nomeAba);
+  if (sheet) {
+     Logger.log("Aba '" + nomeAba + "' já existe. Apenas formatando cabeçalhos.");
+  } else {
+     sheet = ss.insertSheet(nomeAba);
+  }
+  const headers = [
+    CONFIG.headers.prontuario, CONFIG.headers.ramData, CONFIG.headers.ramTipo,
+    "DESCRIÇÃO DA RAM", CONFIG.headers.ramGravidade, CONFIG.headers.ramDesfecho,
+    CONFIG.headers.idEventoRam, CONFIG.headers.causalidadeRam
+  ];
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setValues([headers]).setFontWeight("bold").setBackground("#fff2cc").setBorder(true, true, true, true, true, true);
+  sheet.setFrozenRows(1);
+  
+  try {
+    const tabelaSheet = ss.getSheetByName(CONFIG.sheets.tabelaResumo);
+    const headersTabela = tabelaSheet.getRange(1, 1, 1, tabelaSheet.getLastColumn()).getValues()[0];
+    const idxProntuarioTabela = headersTabela.indexOf(CONFIG.headers.prontuario);
+    const allProntuarios = tabelaSheet.getDataRange().getValues().slice(1).map(row => row[idxProntuarioTabela]);
+    const uniqueProntuarios = [...new Set(allProntuarios)].filter(p => p);
+    const prontuarioRule = SpreadsheetApp.newDataValidation().requireValueInList(uniqueProntuarios).setAllowInvalid(false).build();
+    sheet.getRange(2, headers.indexOf(CONFIG.headers.prontuario) + 1, sheet.getMaxRows() - 1, 1).setDataValidation(prontuarioRule);
+  } catch (e) {
+    Logger.log("Não foi possível aplicar dropdown de prontuários na aba RAM: " + e.message);
+  }
+  sheet.autoResizeColumns(1, headers.length);
+  Logger.log("Aba 'FARMACOVIGILÂNCIA' configurada.");
+}
+
+function setupAbaCustoEfetividade_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const nomeAba = CONFIG.sheets.prescricaoCE;
+  let sheet = ss.getSheetByName(nomeAba);
+  if (sheet) {
+     Logger.log("Aba '" + nomeAba + "' já existe. Apenas formatando cabeçalhos.");
+  } else {
+     sheet = ss.insertSheet(nomeAba);
+  }
+  const headers = [
+    CONFIG.headers.prontuario, CONFIG.headers.medicamento, CONFIG.headers.fabricante,
+    CONFIG.headers.dataInicio, CONFIG.headers.dataFim
+  ];
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setValues([headers]).setFontWeight("bold").setBackground("#d9ead3").setBorder(true, true, true, true, true, true);
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, headers.length);
+  Logger.log("Aba 'Prescricao_CE' configurada.");
+}

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    /* (Todo o seu CSS "branco e azul" permanece o mesmo) */
+    :root {
+      --cor-primaria: #005a9c;
+      --cor-primaria-hover: #004a80;
+      --cor-fundo-app: #f4f7f6;
+      --cor-fundo-card: #ffffff;
+      --cor-borda: #e0e0e0;
+      --cor-texto-titulo: #1f1f1f;
+      --cor-texto-corpo: #444;
+      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --border-radius: 8px;
+    }
+    body, html {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: var(--cor-fundo-app);
+      color: var(--cor-texto-corpo);
+      margin: 0; padding: 0;
+      line-height: 1.6;
+      overflow: hidden;
+    }
+    #splash-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 32px;
+      box-sizing: border-box;
+    }
+    #splash-title {
+      font-size: 1.8em;
+      font-weight: 600;
+      color: var(--cor-texto-titulo);
+      margin: 0 0 20px 0;
+      text-align: center;
+    }
+    .progress-bar-container {
+      width: 80%;
+      height: 20px;
+      background-color: #e0e0e0; 
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background-color: var(--cor-primaria);
+      border-radius: 10px;
+      transition: width 0.1s ease-out;
+    }
+    #progress-text {
+      margin-top: 10px;
+      font-size: 1em;
+      font-weight: 500;
+      color: var(--cor-texto-corpo);
+    }
+    #content-screen {
+      display: none; /* Começa escondido */
+      padding: 32px;
+      animation: fadeIn 0.8s ease-out;
+    }
+    .card {
+      background-color: var(--cor-fundo-card);
+      padding: 24px 32px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--sombra-card);
+      overflow: hidden; 
+    }
+    h3 {
+      font-size: 1.9em; font-weight: 700;
+      color: var(--cor-primaria); /* Azul Escuro */
+      margin: 0 0 4px 0; text-align: center;
+    }
+    p { font-size: 1em; margin-top: 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 8px; }
+    button.action {
+      font-size: 1.1em; font-weight: bold; color: #fff;
+      background-color: var(--cor-primaria);
+      border: none; padding: 14px 28px; border-radius: 6px;
+      cursor: pointer; float: right;
+      transition: all 0.2s ease;
+    }
+    button.action:hover {
+      background-color: var(--cor-primaria-hover);
+      box-shadow: 0 4px 10px rgba(0, 90, 156, 0.3);
+    }
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .spinner {
+      border: 6px solid var(--cor-fundo-app);
+      border-top: 6px solid var(--cor-primaria);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+    #loading-overlay p {
+      font-weight: 600;
+      color: var(--cor-texto-titulo);
+      margin-top: 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  
+  <div id="splash-screen">
+    <h2 id="splash-title">Planilha Auxiliar para EUM</h2>
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" id="progress-bar-fill"></div>
+    </div>
+    <div id="progress-text">0%</div>
+  </div>
+
+  <div id="content-screen">
+    <div class="card">
+      <h3>Bem-vindo ao Assistente de Análise de EUM</h3>
+      <p>Esta ferramenta foi desenhada para o ajudar a estruturar e analisar um Estudo de Utilização de Medicamentos (EUM) de forma robusta e intuitiva.</p>
+      
+      <h4>Potenciais desta Ferramenta</h4>
+      <ul>
+        <li><strong>Centralização de Dados:</strong> Ligue dados de prescrição, demografia, exames laboratoriais e RAMs num único local.</li>
+        <li><strong>Análise de Protocolos:</strong> Avalie dinamicamente a adesão aos protocolos de dose.</li>
+        <li><strong>Análise de Tendência Interativa:</strong> Gere gráficos (Plotly.js) para ver o impacto do medicamento ao longo do tempo.</li>
+        <li><strong>Farmacovigilância "Padrão Ouro":</strong> Registe e avalie a causalidade de RAMs (Naranjo).</li>
+      </ul>
+      
+      <hr style="border: 0; border-top: 1px solid var(--cor-borda); margin: 20px 0;">
+      
+      <p>Clique em "Avançar" para configurar a aba principal do seu projeto.</p>
+      
+      <button class="action" onclick="avancar()">Avançar</button>
+    </div>
+  </div>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p>A carregar o assistente...</p>
+  </div>
+
+  <script>
+    window.addEventListener('load', function() {
+      startLoadingAnimation();
+    });
+    
+    function startLoadingAnimation() {
+      const bar = document.getElementById('progress-bar-fill');
+      const text = document.getElementById('progress-text');
+      let progress = 0;
+      const interval = setInterval(function() {
+        progress += 4; 
+        if (progress > 100) progress = 100;
+        bar.style.width = progress + '%';
+        text.textContent = progress + '%';
+        if (progress >= 100) {
+          clearInterval(interval);
+          setTimeout(showContent, 300); 
+        }
+      }, 30); 
+    }
+    
+    function showContent() {
+      document.getElementById('splash-screen').style.display = 'none';
+      document.getElementById('content-screen').style.display = 'block';
+    }
+
+    function avancar() {
+      document.getElementById('content-screen').style.display = 'none';
+      document.getElementById('loading-overlay').style.display = 'flex';
+      
+      // --- MUDANÇA (v6) ---
+      // Chama a nova "Página 2" (Setup do Menu Principal)
+      // em vez da página de módulos
+      google.script.run
+        .withSuccessHandler(google.script.host.close)
+        .irParaSetupMenuPrincipal(); // <-- NOVO NOME DA FUNÇÃO
+      // --- FIM DA MUDANÇA ---
+    }
+  </script>
+</body>
+</html>
