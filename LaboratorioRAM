@@ -1,0 +1,744 @@
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
+<script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+<style>
+  :root {
+    --cor-primaria: #005a9c;
+    --cor-fundo-app: #f4f7f6;
+    --cor-fundo-card: #ffffff;
+    --cor-borda: #e0e0e0;
+    --cor-texto-titulo: #1f1f1f;
+    --cor-texto-corpo: #444;
+    --cor-vermelho-erro: #D93025;
+    --cor-vermelho-intervencao: #d13025; 
+    --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --border-radius: 8px;
+    --cor-grave: #dc3545;
+    --cor-moderada: #ffc107;
+    --cor-leve: #28a745;
+    --cor-nd: #6c757d;
+  }
+  body, html {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background-color: var(--cor-fundo-card); /* Fundo branco para splash */
+    overflow: hidden; 
+  }
+
+  /* --- ECRÃ DE SPLASH (AGORA COM SPINNER) --- */
+  #splash-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: var(--cor-fundo-card);
+    z-index: 100;
+    transition: opacity 0.5s ease-out;
+  }
+  .spinner {
+    width: 60px;
+    height: 60px;
+    border: 6px solid var(--cor-borda); 
+    border-top-color: var(--cor-primaria); 
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  #splash-text {
+    font-size: 1.2em;
+    font-weight: 500;
+    color: var(--cor-texto-corpo);
+    margin-top: 25px;
+  }
+  .loading-dots::after {
+    content: '.';
+    animation: dots 1.4s steps(5, end) infinite;
+  }
+  @keyframes dots {
+    0%, 20% { content: "."; }
+    40% { content: ".."; }
+    60% { content: "..."; }
+    80%, 100% { content: ""; }
+  }
+  /* --- FIM DO SPLASH --- */
+  
+  .container-lab {
+    display: grid;
+    grid-template-columns: 320px 1fr; 
+    grid-template-rows: 1fr;
+    height: 100vh; 
+    background-color: var(--cor-fundo-app);
+    opacity: 0; /* Começa escondido */
+    transition: opacity 0.5s ease-in;
+  }
+  
+  .control-panel {
+    background-color: var(--cor-fundo-card);
+    border-right: 1px solid var(--cor-borda);
+    padding: 20px;
+    box-shadow: var(--sombra-card);
+    overflow-y: auto; 
+    height: 100vh; 
+    box-sizing: border-box; 
+  }
+  
+  .control-panel h4 {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--cor-texto-titulo);
+    margin: 0 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--cor-borda);
+  }
+  
+  .control-group { margin-bottom: 20px; }
+  .control-group label {
+    display: block; font-weight: bold;
+    font-size: 0.9em; margin-bottom: 6px;
+  }
+  .control-group select {
+    width: 100%; 
+    padding: 8px; 
+    font-size: 0.9em;
+    border: 1px solid var(--cor-borda);
+    border-radius: 6px; 
+    background-color: #fff;
+    box-sizing: border-box; 
+  }
+  
+  .checkbox-group {
+    max-height: 150px; overflow-y: auto;
+    border: 1px solid var(--cor-borda);
+    border-radius: 6px; padding: 5px;
+  }
+  .checkbox-group label {
+    display: flex; align-items: center; padding: 8px;
+    border-radius: 4px; cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  .checkbox-group label:hover { background-color: var(--cor-fundo-app); }
+  .checkbox-group input { margin-right: 10px; }
+  
+  #age-slider { margin-top: 15px; }
+  .slider-readout {
+    font-size: 0.9em; font-weight: 500;
+    color: var(--cor-texto-corpo);
+    margin-top: 10px;
+  }
+  
+  button.action, button.secondary {
+    width: 100%;
+    font-weight: bold;
+    padding: 14px 20px; 
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-sizing: border-box; 
+  }
+
+  button.action {
+    font-size: 1.1em; 
+    background-color: var(--cor-primaria);
+    border: none;
+    color: #fff;
+  }
+  button.action:hover { background-color: var(--cor-primaria-hover); }
+  
+  button.secondary {
+    font-size: 0.9em;
+    background-color: #fff;
+    border: 2px solid var(--cor-primaria);
+    color: var(--cor-primaria);
+    margin-top: 10px; 
+  }
+  button.secondary:hover {
+    background-color: var(--cor-fundo-app);
+    border-color: var(--cor-primaria-hover);
+  }
+
+  #voltar-loading {
+    display: none;
+    color: var(--cor-primaria);
+    font-size: 0.9em;
+    text-align: center;
+    margin-top: 10px;
+  }
+
+  .chart-container { 
+    padding: 20px; 
+    height: 100vh; 
+    box-sizing: border-box; 
+  }
+  #graficoPlotly {
+    width: 100%; 
+    height: 100%; 
+    background-color: var(--cor-fundo-card);
+    border-radius: var(--border-radius);
+    box-shadow: var(--sombra-card);
+  }
+  
+  #error-container {
+    display: none; 
+    background-color: var(--cor-fundo-card);
+    padding: 30px;
+    margin: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--sombra-card);
+    border-left: 5px solid var(--cor-vermelho-erro);
+  }
+  #error-container h3 {
+    color: var(--cor-vermelho-erro);
+    margin-top: 0;
+  }
+  #error-container p {
+    font-size: 1.1em;
+    color: var(--cor-texto-corpo);
+  }
+  #error-container pre {
+    background-color: var(--cor-fundo-app);
+    padding: 15px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: monospace;
+    color: var(--cor-texto-titulo);
+  }
+</style>
+
+<div id="splash-screen">
+  <div class="spinner"></div>
+  <div id="splash-text">A carregar dados de segurança<span class="loading-dots"></span></div>
+</div>
+
+<div class="container-lab" id="main-container" style="opacity: 0;">
+  
+  <div class="control-panel">
+    <h4>Laboratório de Segurança</h4>
+    
+    <div class="control-group">
+       <button class="secondary" id="btn-voltar" onclick="voltarParaConfiguracao()" style="padding: 10px 15px; font-size: 0.9em; border-width: 1px;">
+         &larr; Voltar (Alterar Coorte)
+       </button>
+       <div id="voltar-loading">A voltar...</div>
+    </div>
+
+    <div class="control-group">
+      <label>1. Filtros de Coorte:</label>
+      <div id="age-slider"></div>
+      <div id="age-readout" class="slider-readout">A carregar...</div>
+    </div>
+    
+    <div class="control-group">
+      <label for="filtro-gravidade">2. Filtro de Gravidade:</label>
+      <div id="filtro-gravidade" class="checkbox-group">
+        A carregar...
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label for="filtro-causalidade">3. Filtro de Causalidade (Naranjo):</label>
+      <div id="filtro-causalidade" class="checkbox-group">
+        A carregar...
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <label for="control-agrupamento">4. Agrupar Tempo por:</label>
+      <select id="control-agrupamento">
+        <option value="semana">Semana</option>
+        <option value="dia">Dia</option>
+        <option value="mes">Mês</option>
+      </select>
+    </div>
+    
+    <div class="control-group">
+      <label for="control-tipografico">5. Tipo de Visualização:</label>
+      <select id="control-tipografico">
+        <option value="bubble">Matriz de Risco (Bubble Chart)</option>
+        <option value="heatmap">Incidência no Tempo (Heatmap)</option>
+        <option value="treemap">Incidência Geral (Treemap)</option>
+      </select>
+    </div>
+    
+    <br>
+    <button class="action" onclick="desenharGraficoRouterRAM()">🔄 Atualizar Gráfico</button>
+
+  </div>
+  
+  <div class="chart-container">
+    <div id="graficoPlotly">
+       </div>
+  </div>
+  
+</div>
+
+<div id="error-container">
+  <h3>Falha ao Carregar o Laboratório</h3>
+  <p>Ocorreu um erro ao tentar recolher os dados do seu projeto. A mensagem de erro do *backend* foi:</p>
+  <pre id="error-message"></pre>
+  <p style="margin-top: 20px;"><b>Como resolver:</b><br>
+  Verifique as suas abas `FARMACOVIGILÂNCIA`, `MENU PRINCIPAL` e `Prescrição de Doses` para nomes de colunas em falta.</p>
+</div>
+
+
+<script>
+  // 1. Variáveis Globais
+  let globalRawData;
+  let infoProjeto;
+  let globalAgeSlider = null; 
+  let minAge = 0; 
+  let maxAge = 0; 
+  const ONE_DAY_MS_JS = 1000 * 60 * 60 * 24;
+
+  /**
+   * PONTO DE ENTRADA: Espera a página carregar
+   */
+  window.addEventListener('load', iniciarLaboratorioRAM);
+
+  /**
+   * Pede os dados ao backend
+   */
+  function iniciarLaboratorioRAM() {
+    console.log("Página 100% carregada. A pedir dados de RAM ao backend...");
+    
+    if (typeof Plotly === 'undefined' || typeof noUiSlider === 'undefined') {
+      mostrarPainelDeErro("Falha ao carregar bibliotecas externas (Plotly ou noUiSlider).");
+      return;
+    }
+    
+    google.script.run
+      .withSuccessHandler(onDadosRecebidos)
+      .withFailureHandler(onErroAoReceber)
+      .buscarDadosParaLaboratorioRAM(); // <--- CHAMA A NOVA FUNÇÃO DE BACKEND
+  }
+
+  /**
+   * Função chamada se 'buscarDadosParaLaboratorioRAM' falhar (ex: rede)
+   */
+  function onErroAoReceber(erro) {
+    console.error("Erro fatal de comunicação:", erro);
+    mostrarPainelDeErro(erro.message);
+  }
+
+  /**
+   * Função chamada quando 'buscarDadosParaLaboratorioRAM' retorna com sucesso
+   */
+  function onDadosRecebidos(dadosJsonString) {
+    try {
+      const dadosInjetados = JSON.parse(dadosJsonString);
+
+      if (!dadosInjetados) {
+         throw new Error("O backend retornou 'null'. Verifique os logs do Apps Script para erros fatais.");
+      }
+      if (dadosInjetados.sucesso === false) {
+        throw new Error(dadosInjetados.erro); // Lança o erro do backend
+      }
+      
+      console.log("Dados de RAM recebidos e parseados com sucesso.", dadosInjetados);
+
+      globalRawData = dadosInjetados.rawData;
+      infoProjeto = dadosInjetados.info;
+      
+      setupPainelDeControlo();
+
+      // --- TRANSIÇÃO DE ENTRADA ---
+      mostrarConteudoPrincipal();
+
+    } catch (e) {
+      console.error("Erro ao processar dados:", e.message);
+      mostrarPainelDeErro(e.message);
+    }
+  }
+  
+  /**
+   * Mostra o painel de erro e esconde o gráfico
+   */
+  function mostrarPainelDeErro(mensagem) {
+    const splash = document.getElementById('splash-screen');
+    const main = document.getElementById('main-container');
+    const error = document.getElementById('error-container');
+
+    // Esconde o splash
+    splash.style.opacity = '0';
+    setTimeout(() => { splash.style.display = 'none'; }, 500);
+    
+    // Mostra o erro
+    error.style.display = 'block';
+    document.getElementById('error-message').textContent = mensagem;
+    main.style.display = 'none'; // Esconde o painel principal
+  }
+
+  /**
+   * Mostra o conteúdo principal (fade-in)
+   */
+  function mostrarConteudoPrincipal() {
+    const splash = document.getElementById('splash-screen');
+    const main = document.getElementById('main-container');
+
+    splash.style.opacity = '0';
+    
+    setTimeout(function() {
+      splash.style.display = 'none'; 
+      main.style.opacity = '1';
+      document.body.style.backgroundColor = 'var(--cor-fundo-app)'; 
+    }, 500); // Duração da animação
+  }
+  // --- FIM DO BLOCO DE CARREGAMENTO ---
+
+  // --- NOVA FUNÇÃO "VOLTAR" ---
+  function voltarParaConfiguracao() {
+    const btn = document.getElementById('btn-voltar');
+    const loading = document.getElementById('voltar-loading');
+    btn.disabled = true;
+    loading.style.display = 'block';
+
+    // Mostra o splash screen ANTES de fechar
+    const splash = document.getElementById('splash-screen');
+    document.getElementById('splash-text').innerHTML = 'A voltar para a configuração<span class="loading-dots"></span>';
+    document.getElementById('main-container').style.opacity = '0';
+    splash.style.display = 'flex';
+    splash.style.opacity = '1';
+    document.body.style.backgroundColor = 'var(--cor-fundo-card)';
+
+    // 1. Chama a função que abre o modal 'AnaliseMedicamento'
+    google.script.run
+      .withSuccessHandler(function() {
+        // 2. Se tiver sucesso, fecha este modal
+        google.script.host.close();
+      })
+      .withFailureHandler(function(err) {
+        // Se falhar, reverte a UI
+        btn.disabled = false;
+        loading.style.display = 'none';
+        mostrarPainelDeErro("Erro ao voltar: " + err.message);
+      })
+      .abrirModalAnaliseMedicamento(); // Esta função está no ANALISE.GS
+  }
+
+  // 3. Helpers de JavaScript
+  function getUniqueValues(data, key) {
+     return [...new Set(data.map(row => row[key]))]
+            .filter(val => val && val !== "N/D" && val !== "N/A")
+            .sort();
+  }
+
+  /**
+   * FILTRA OS DADOS BRUTOS com base em todos os controlos
+   */
+  function filtrarDadosRAM() {
+    const gravidadeSelecionada = Array.from(document.querySelectorAll('#filtro-gravidade input:checked')).map(cb => cb.value);
+    const causalidadeSelecionada = Array.from(document.querySelectorAll('#filtro-causalidade input:checked')).map(cb => cb.value);
+    const [idadeMinSelecionada, idadeMaxSelecionada] = globalAgeSlider.get();
+    
+    return globalRawData.filter(row => {
+      // Filtro de Gravidade
+      if (!gravidadeSelecionada.includes(row.gravidade)) return false;
+      // Filtro de Causalidade
+      if (!causalidadeSelecionada.includes(row.causalidade)) return false;
+
+      // Filtro de Idade
+      let idadeEmDias = null;
+      if (row.dataNascPacienteMs && row.dataRamMs) {
+        const idadeMs = row.dataRamMs - row.dataNascPacienteMs;
+        idadeEmDias = Math.floor(idadeMs / ONE_DAY_MS_JS);
+      }
+      
+      if (idadeEmDias !== null && (idadeEmDias < idadeMinSelecionada || idadeEmDias > idadeMaxSelecionada)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+  
+  /**
+   * Roteador de Gráfico (Chamado pelo botão)
+   */
+  function desenharGraficoRouterRAM() {
+     if (!globalRawData) return; 
+     
+     const tipoGrafico = document.getElementById('control-tipografico').value;
+     
+     if (tipoGrafico === 'bubble') {
+       desenharGraficoRiscoBubble();
+     } else if (tipoGrafico === 'heatmap') {
+       desenharGraficoTemporalHeatmap();
+     } else if (tipoGrafico === 'treemap') {
+       desenharGraficoIncidenciaTreemap();
+     }
+  }
+
+  /**
+   * GRÁFICO 1: Matriz de Risco (Bubble Chart)
+   */
+  function desenharGraficoRiscoBubble() {
+    console.log("A desenhar Matriz de Risco (Bubble)...");
+    const dadosFiltrados = filtrarDadosRAM();
+    
+    const contagem = {}; // { "Grave_Provável": 10, "Leve_Possível": 5 }
+    dadosFiltrados.forEach(row => {
+        const chave = `${row.gravidade}_${row.causalidade}`;
+        contagem[chave] = (contagem[chave] || 0) + 1;
+    });
+    
+    const xCausalidade = [];
+    const yGravidade = [];
+    const zContagem = [];
+    const hoverText = [];
+
+    const ordemGravidade = ["Leve", "Moderada", "Grave/Séria", "N/D"];
+    const ordemCausalidade = ["Duvidosa", "Possível", "Provável", "Definida", "N/A", "N/D"];
+
+    Object.keys(contagem).forEach(chave => {
+        const [grav, caus] = chave.split('_');
+        yGravidade.push(grav);
+        xCausalidade.push(caus);
+        zContagem.push(contagem[chave]);
+        hoverText.push(`<b>Gravidade:</b> ${grav}<br><b>Causalidade:</b> ${caus}<br><b>Contagem (N):</b> ${contagem[chave]}`);
+    });
+
+    const trace = {
+      x: xCausalidade,
+      y: yGravidade,
+      text: hoverText,
+      hoverinfo: 'text',
+      mode: 'markers',
+      marker: {
+        size: zContagem.map(n => Math.max(n * 5, 10)), // Ajusta o tamanho da bolha
+        color: yGravidade.map(g => {
+            if (g === "Grave/Séria") return 'var(--cor-grave)';
+            if (g === "Moderada") return 'var(--cor-moderada)';
+            if (g === "Leve") return 'var(--cor-leve)';
+            return 'var(--cor-nd)';
+        }),
+        opacity: 0.7
+      }
+    };
+
+    const layout = {
+      title: 'Matriz de Risco (Gravidade vs. Causalidade)',
+      xaxis: { 
+        title: 'Causalidade (Naranjo)', 
+        type: 'category',
+        categoryorder: 'array',
+        categoryarray: ordemCausalidade
+      },
+      yaxis: { 
+        title: 'Gravidade', 
+        type: 'category',
+        categoryorder: 'array',
+        categoryarray: ordemGravidade
+      },
+      hovermode: 'closest',
+      margin: { t: 80, b: 100, l: 150 }
+    };
+
+    Plotly.newPlot('graficoPlotly', [trace], layout);
+  }
+
+  /**
+   * GRÁFICO 2: Incidência no Tempo (Heatmap)
+   */
+  function desenharGraficoTemporalHeatmap() {
+    console.log("A desenhar Incidência no Tempo (Heatmap)...");
+    const dadosFiltrados = filtrarDadosRAM();
+    const agrupamento = document.getElementById('control-agrupamento').value;
+
+    const contagem = {}; // { "Hipercalemia_1": 5, "Vómito_0": 2 }
+    const todosNomesRAM = new Set();
+    const todosBuckets = new Set();
+
+    dadosFiltrados.forEach(row => {
+      let bucketId;
+      if (agrupamento === "semana") bucketId = Math.floor(row.diasRelativos / 7);
+      else if (agrupamento === "mes") bucketId = Math.floor(row.diasRelativos / 30.44);
+      else bucketId = row.diasRelativos;
+      
+      const nomeRam = row.nomeRam;
+      const chave = `${nomeRam}_${bucketId}`;
+      contagem[chave] = (contagem[chave] || 0) + 1;
+      todosNomesRAM.add(nomeRam);
+      todosBuckets.add(bucketId);
+    });
+    
+    const yLabels = Array.from(todosNomesRAM).sort();
+    const xLabels = Array.from(todosBuckets).map(Number).sort((a, b) => a - b);
+    
+    // Constrói a matriz Z (2D)
+    const zMatrix = [];
+    yLabels.forEach(ram => {
+      const linha = [];
+      xLabels.forEach(bucketId => {
+        const chave = `${ram}_${bucketId}`;
+        linha.push(contagem[chave] || 0); // 0 se não houver eventos
+      });
+      zMatrix.push(linha);
+    });
+
+    const trace = {
+      x: xLabels,
+      y: yLabels,
+      z: zMatrix,
+      type: 'heatmap',
+      colorscale: 'YlOrRd', // Amarelo -> Laranja -> Vermelho
+      showscale: true,
+      hovertemplate: '<b>%{y}</b><br>Período: %{x}<br>Contagem: %{z}<extra></extra>'
+    };
+    
+    const layout = {
+      title: `Heatmap de Incidência de RAMs vs. Tempo`,
+      xaxis: { 
+        title: `Período Relativo à Intervenção (${agrupamento})`,
+        // Adiciona a linha do Dia 0
+        shapes: [{
+            type: 'line', x0: 0, y0: -0.5, x1: 0, y1: yLabels.length - 0.5,
+            line: { color: 'var(--cor-primaria)', width: 3, dash: 'dash' }
+        }]
+      },
+      yaxis: { title: 'Reação Adversa (RAM)' },
+      margin: { t: 80, b: 100, l: 200 }
+    };
+
+    Plotly.newPlot('graficoPlotly', [trace], layout);
+  }
+
+  /**
+   * GRÁFICO 3: Incidência Geral (Treemap)
+   */
+  function desenharGraficoIncidenciaTreemap() {
+    console.log("A desenhar Incidência Geral (Treemap)...");
+    const dadosFiltrados = filtrarDadosRAM();
+
+    // { "Grave/Séria": { "Hipercalemia": 5, ...}, "Leve": ...}
+    const contagemHierarquica = {};
+    
+    dadosFiltrados.forEach(row => {
+      const grav = row.gravidade || "N/D";
+      const ram = row.nomeRam || "N/D";
+      
+      if (!contagemHierarquica[grav]) contagemHierarquica[grav] = {};
+      contagemHierarquica[grav][ram] = (contagemHierarquica[grav][ram] || 0) + 1;
+    });
+
+    const labels = ["RAMs"]; // O "pai" de todos
+    const parents = [""]; // O "pai" não tem pai
+    const values = [0]; // O "pai" tem valor 0 (é a soma dos filhos)
+    const cores = [""]; // Cor do pai
+
+    Object.keys(contagemHierarquica).forEach(gravidade => {
+      labels.push(gravidade);
+      parents.push("RAMs");
+      values.push(0); // O valor do grupo de gravidade é a soma dos filhos
+      
+      // Define a cor para o grupo de gravidade
+      if (gravidade === "Grave/Séria") cores.push('var(--cor-grave)');
+      else if (gravidade === "Moderada") cores.push('var(--cor-moderada)');
+      else if (gravidade === "Leve") cores.push('var(--cor-leve)');
+      else cores.push('var(--cor-nd)');
+
+      Object.keys(contagemHierarquica[gravidade]).forEach(ram => {
+        labels.push(`${ram} (${gravidade})`); // Nome único para a folha
+        parents.push(gravidade); // O pai é a gravidade
+        values.push(contagemHierarquica[gravidade][ram]); // O valor é a contagem
+        cores.push(null); // As folhas herdam a cor do pai
+      });
+    });
+
+    const trace = {
+      type: 'treemap',
+      labels: labels,
+      parents: parents,
+      values: values,
+      textinfo: 'label+value+percent-parent',
+      hoverinfo: 'label+value+percent-parent',
+      marker: {
+        colors: cores, // Aplica as cores aos grupos
+        line: { width: 1, color: '#fff'}
+      }
+    };
+    
+    const layout = {
+      title: 'Visão Geral da Incidência (Gravidade e Tipo de RAM)',
+      margin: { t: 80, b: 20, l: 20, r: 20 }
+    };
+
+    Plotly.newPlot('graficoPlotly', [trace], layout);
+  }
+  
+  
+  /**
+   * Função de Setup: Chamada uma vez ao carregar
+   */
+  function setupPainelDeControlo() {
+    if (!globalRawData) return; 
+
+    // 1. Preenche os Checkboxes de Filtro (Gravidade, Causalidade)
+    const gravidadeContainer = document.getElementById('filtro-gravidade');
+    const causalidadeContainer = document.getElementById('filtro-causalidade');
+    
+    const gravidadesUnicas = getUniqueValues(globalRawData, 'gravidade');
+    const causalidadesUnicas = getUniqueValues(globalRawData, 'causalidade');
+    
+    gravidadeContainer.innerHTML = '';
+    causalidadeContainer.innerHTML = '';
+    
+    gravidadesUnicas.forEach(val => {
+      gravidadeContainer.innerHTML += `<label><input type="checkbox" name="gravidade" value="${val}" checked> ${val}</label>`;
+    });
+    causalidadesUnicas.forEach(val => {
+      causalidadeContainer.innerHTML += `<label><input type="checkbox" name="causalidade" value="${val}" checked> ${val}</label>`;
+    });
+
+
+    // 2. Configura o Slider de Idade
+    const readout = document.getElementById('age-readout');
+    const slider = document.getElementById('age-slider');
+    
+    const idades = globalRawData
+      .map(row => {
+        if (!row.dataNascPacienteMs || !row.dataRamMs) return null;
+        const idadeMs = row.dataRamMs - row.dataNascPacienteMs;
+        return Math.floor(idadeMs / ONE_DAY_MS_JS);
+      })
+      .filter(idade => idade !== null && !isNaN(idade));
+    
+    if (idades.length > 0) {
+      minAge = Math.min(...idades);
+      maxAge = Math.max(...idades);
+      if (minAge === maxAge) maxAge += 1; 
+    } else {
+      minAge = 0;
+      maxAge = 100; // Padrão
+    }
+    
+    globalAgeSlider = noUiSlider.create(slider, {
+        start: [minAge, maxAge], 
+        connect: true,
+        step: 1,
+        range: { 'min': minAge, 'max': maxAge },
+        tooltips: [true, true], 
+        format: {
+          to: value => Math.round(value),
+          from: value => Number(value)
+        }
+    });
+    
+    slider.noUiSlider.on('update', function (values) {
+        readout.innerHTML = `Faixa de idade (dias): <strong>${values[0]}</strong> - <strong>${values[1]}</strong>`;
+    });
+    
+    // 3. Desenha o gráfico pela primeira vez
+    desenharGraficoRouterRAM();
+  }
+  
+</script>
