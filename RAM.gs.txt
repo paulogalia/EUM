@@ -7,7 +7,6 @@
 
 /**
  * Abre o novo pop-up "Análise de RAMs".
- * (Esta função permanece igual)
  */
 function abrirModalAnaliseRAM() {
   const html = HtmlService.createHtmlOutputFromFile('AnaliseRAM')
@@ -18,7 +17,6 @@ function abrirModalAnaliseRAM() {
 
 /**
  * Função principal do "Construtor de Relatório de RAMs".
- * (v3 - LÊ DA NOVA ABA 'FARMACOVIGILÂNCIA')
  * @param {object} opcoes - Objeto com { modulosEstaticos: [], moduloTemporal: {} }
  */
 function gerarAnaliseRAM(opcoes) {
@@ -31,10 +29,8 @@ function gerarAnaliseRAM(opcoes) {
   if (reportSheet) reportSheet.clear();
   else reportSheet = ss.insertSheet(nomeRelatorio);
   ss.setActiveSheet(reportSheet);
-  
   reportSheet.getRange("B1").setValue("Relatório de Farmacovigilância (RAMs) Gerado em: " + new Date().toLocaleString())
       .setFontWeight("bold").setFontSize(14);
-  
   // --- 2. Ler os Dados (DE DUAS FONTES) ---
   
   // Fonte 1: Dados dos Pacientes (da Tabela)
@@ -53,7 +49,6 @@ function gerarAnaliseRAM(opcoes) {
   const idxRamData = ramHeaders.indexOf(CONFIG.headers.ramData);
   const idxRamGravidade = ramHeaders.indexOf(CONFIG.headers.ramGravidade);
   const idxRamDesfecho = ramHeaders.indexOf(CONFIG.headers.ramDesfecho);
-
   if (idxRamProntuario === -1 || idxRamTipo === -1) {
     throw new Error(`Colunas '${CONFIG.headers.prontuario}' e/ou '${CONFIG.headers.ramTipo}' não encontradas na aba '${CONFIG.sheets.ramTab}'.`);
   }
@@ -90,7 +85,7 @@ function gerarAnaliseRAM(opcoes) {
     if (idxRamTipo === -1) { // idxSexo é verificado dentro do loop
       erros.push("Módulo 'Incidência por Sexo' pulado: Coluna '" + CONFIG.headers.ramTipo + "' não encontrada.");
     } else {
-      const contagem = {}; 
+      const contagem = {};
       eventosRAM.forEach(row => {
         const prontuario = row[idxRamProntuario];
         const patient = patientMap[prontuario]; // Junta com dados da Tabela
@@ -142,7 +137,7 @@ function gerarAnaliseRAM(opcoes) {
          todasGravidades.add(gravidade);
       });
       const gravidadesOrdenadas = Array.from(todasGravidades).sort();
-      const dadosGrafico = [["Tipo de RAM", ...gravidadesOrdenadas]]; 
+      const dadosGrafico = [["Tipo de RAM", ...gravidadesOrdenadas]];
       Object.keys(agregador).sort().forEach(ram => {
         const linha = [ram];
         gravidadesOrdenadas.forEach(gravidade => {
@@ -151,7 +146,8 @@ function gerarAnaliseRAM(opcoes) {
         dadosGrafico.push(linha);
       });
       if (dadosGrafico.length > 1) {
-         currentRow = gerarGrafico_(reportSheet, "Frequência de RAMs por Gravidade", Charts.ChartType.COLUMN, dadosGrafico, currentRow, chartWidth, chartHeight, true); // true = stacked
+         currentRow = gerarGrafico_(reportSheet, "Frequência de RAMs por Gravidade", Charts.ChartType.COLUMN, dadosGrafico, currentRow, chartWidth, chartHeight, true);
+         // true = stacked
       }
     }
   }
@@ -219,7 +215,6 @@ function gerarAnaliseRAM(opcoes) {
 function calcularTendemciaRAMs_(opcoesTemporal, eventosRAM, ramHeaders) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-
   // --- A. Encontrar Data Início (Dia 0) ---
   const prescricaoSheet = ss.getSheetByName(CONFIG.sheets.prescricao);
   if (!prescricaoSheet) throw new Error("Aba '" + CONFIG.sheets.prescricao + "' não encontrada.");
@@ -230,7 +225,8 @@ function calcularTendemciaRAMs_(opcoesTemporal, eventosRAM, ramHeaders) {
   const idxPrescData = hPresc.indexOf(CONFIG.headers.dataInicio);
   const idxPrescMed = hPresc.indexOf(CONFIG.headers.medicamento);
 
-  const pacientesAlvo = {}; // { "prontuario": 123456789 (timestamp) }
+  const pacientesAlvo = {};
+  // { "prontuario": 123456789 (timestamp) }
   prescricaoData.forEach(row => {
     const prontuario = row[idxPrescPront];
     const medicamento = row[idxPrescMed];
@@ -241,13 +237,13 @@ function calcularTendemciaRAMs_(opcoesTemporal, eventosRAM, ramHeaders) {
       }
     }
   });
-
   // --- B. Encontrar Data da RAM (usando cabeçalhos da aba RAM) ---
-  const idxRamData = ramHeaders.indexOf(CONFIG.headers.ramData); 
+  const idxRamData = ramHeaders.indexOf(CONFIG.headers.ramData);
   const idxProntuario = ramHeaders.indexOf(CONFIG.headers.prontuario);
   
   // --- C. Agrupar (Bucket) RAMs ---
-  const buckets = {}; // { "-1": 2, "0": 5, "1": 3 } (Contagem, não média)
+  const buckets = {};
+  // { "-1": 2, "0": 5, "1": 3 } (Contagem, não média)
 
   eventosRAM.forEach(row => { // Usa 'eventosRAM' pré-filtrados
     const prontuario = row[idxProntuario];
@@ -268,18 +264,191 @@ function calcularTendemciaRAMs_(opcoesTemporal, eventosRAM, ramHeaders) {
       buckets[bucketId] = (buckets[bucketId] || 0) + 1;
     }
   });
-  
   // --- D. Formatar para Gráfico ---
   const nomeEixoX = `Período (${opcoesTemporal.agrupamento})`;
   const dadosGrafico = [[nomeEixoX, "Contagem de RAMs", { role: 'annotation' }]];
   const bucketsOrdenados = Object.keys(buckets).map(Number).sort((a, b) => a - b);
-  
   bucketsOrdenados.forEach(bucketId => {
     const contagem = buckets[bucketId];
     let anotacao = null;
     if (bucketId === 0) anotacao = "Início da Medicação";
     dadosGrafico.push([bucketId, contagem, anotacao]);
   });
-
   return dadosGrafico;
 }
+
+/**
+ * =============================================================
+ * MÓDULO 11-B: LABORATÓRIO DE SEGURANÇA (RAMs) INTERATIVO
+ * (v1 - Criativo)
+ * =============================================================
+ */
+
+/**
+ * FUNÇÃO 1: Guarda as opções e abre o modal do Laboratório de RAMs.
+ * (Chamada pelo AnaliseMedicamento.html)
+ */
+function abrirModalLaboratorioRAM(opcoes) {
+  try {
+    // Guarda as opções no cache (para o 'Dia 0' e filtros)
+    const cache = CacheService.getScriptCache();
+    cache.put('opcoesRamLabPendente', JSON.stringify(opcoes), 300); 
+
+    // Abre o novo modal do gráfico de RAMs
+    const html = HtmlService.createHtmlOutputFromFile('LaboratorioRAM.html')
+      .setWidth(1200) 
+      .setHeight(700);
+    SpreadsheetApp.getUi().showModalDialog(html, `Laboratório de Segurança (RAMs)`);
+    
+    return { sucesso: true };
+  } catch (e) {
+    Logger.log("Erro em abrirModalLaboratorioRAM: " + e.message);
+    throw new Error("Falha ao abrir o modal do Laboratório de RAMs: " + e.message);
+  }
+}
+
+
+/**
+ * FUNÇÃO 2: Busca e processa todos os dados de RAM para a coorte.
+ * (Chamada pelo LaboratorioRAM.html)
+ */
+function buscarDadosParaLaboratorioRAM() {
+  Logger.log(`Iniciando 'buscarDadosParaLaboratorioRAM (v1)'...`);
+  
+  let dadosInjetados = {};
+  let opcoes;
+
+  try {
+    // 1. Recupera as opções do cache
+    const cache = CacheService.getScriptCache();
+    const opcoesString = cache.get('opcoesRamLabPendente');
+    if (!opcoesString) {
+      throw new Error("Sessão expirada ou opções não encontradas. Por favor, feche e abra o configurador novamente.");
+    }
+    opcoes = JSON.parse(opcoesString);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 2. Carregar Dados ---
+    const prescricaoSheet = ss.getSheetByName(CONFIG.sheets.prescricao);
+    const ramSheet = ss.getSheetByName(CONFIG.sheets.ramTab);
+    if (!prescricaoSheet) throw new Error("Aba '" + CONFIG.sheets.prescricao + "' não encontrada.");
+    if (!ramSheet) throw new Error("Aba '" + CONFIG.sheets.ramTab + "' não encontrada.");
+
+    // Helpers
+    const prescricaoData = prescricaoSheet.getDataRange().getValues();
+    const ramData = ramSheet.getDataRange().getValues();
+    const patientMap = buildPatientMap_(); // <-- Agora usa a função do Utils.gs
+    
+    // Índices da Prescrição (para "Dia 0")
+    const hPresc = prescricaoData.shift(); // Tira o cabeçalho
+    const idxPrescPront = hPresc.indexOf(CONFIG.headers.prontuario);
+    const idxPrescData = hPresc.indexOf(CONFIG.headers.dataInicio);
+    const idxPrescMed = hPresc.indexOf(CONFIG.headers.medicamento);
+    if (idxPrescPront === -1 || idxPrescData === -1 || idxPrescMed === -1) {
+      throw new Error("Colunas essenciais (Prontuário, Data Início, Medicamento) não encontradas na aba 'Prescrição de Doses'.");
+    }
+
+    // Índices de RAM (para dados do evento)
+    const hRam = ramData.shift(); // Tira o cabeçalho
+    const idxRamPront = hRam.indexOf(CONFIG.headers.prontuario);
+    const idxRamData = hRam.indexOf(CONFIG.headers.ramData);
+    const idxRamTipo = hRam.indexOf(CONFIG.headers.ramTipo);
+    const idxRamGravidade = hRam.indexOf(CONFIG.headers.ramGravidade);
+    const idxRamCausalidade = hRam.indexOf(CONFIG.headers.causalidadeRam);
+    const idxRamDesfecho = hRam.indexOf(CONFIG.headers.ramDesfecho);
+    if (idxRamPront === -1 || idxRamData === -1 || idxRamTipo === -1 || idxRamGravidade === -1 || idxRamCausalidade === -1) {
+       throw new Error(`Colunas essenciais não encontradas na aba '${CONFIG.sheets.ramTab}'. Verifique: '${CONFIG.headers.prontuario}', '${CONFIG.headers.ramData}', '${CONFIG.headers.ramTipo}', '${CONFIG.headers.ramGravidade}', '${CONFIG.headers.causalidadeRam}'.`);
+    }
+
+    // --- 3. Encontrar "Dia 0" (Início da Intervenção) ---
+    const pacientesAlvo = {};
+    const ONE_DAY_MS = 1000 * 60 * 60 * 24;
+    prescricaoData.forEach(row => {
+      const prontuario = String(row[idxPrescPront] || "").trim();
+      const medicamento = row[idxPrescMed];
+      const dataInicio = new Date(row[idxPrescData]);
+      if (medicamento === opcoes.medicamento && prontuario && !isNaN(dataInicio.getTime())) { 
+        if (!pacientesAlvo[prontuario] || dataInicio.getTime() < pacientesAlvo[prontuario]) {
+          pacientesAlvo[prontuario] = dataInicio.getTime(); 
+        }
+      }
+    });
+
+    // --- 4. Aplicar Filtros de População ---
+    let prontuariosValidos = Object.keys(pacientesAlvo);
+    prontuariosValidos = prontuariosValidos.filter(prontuario => {
+      const patient = patientMap[prontuario];
+      if (!patient) return false; 
+      if (!patient.dataNasc) return false; 
+      if (opcoes.filtrosPop.sexo !== 'todos' && patient.sexo !== opcoes.filtrosPop.sexo) return false;
+      const éPrematuro = patient.éPrematuro;
+      if (opcoes.filtrosPop.prematuridade === 'prematuro' && !éPrematuro) return false;
+      if (opcoes.filtrosPop.prematuridade === 'padrao' && éPrematuro) return false;
+      return true;
+    });
+    if (prontuariosValidos.length === 0) {
+      throw new Error("Nenhum paciente encontrado para '" + opcoes.medicamento + "' que corresponda aos seus filtros (verifique se todos têm data de nascimento).");
+    }
+    
+    // --- 5. Recolher dados brutos de RAM ---
+    const dadosBrutosRAM = [];
+    ramData.forEach(row => {
+      const prontuario = String(row[idxRamPront] || "").trim();
+      
+      // Filtra apenas RAMs dos pacientes da coorte
+      if (prontuariosValidos.includes(prontuario)) { 
+        const dataRam = new Date(row[idxRamData]);
+        const nomeRam = String(row[idxRamTipo] || "N/D").trim();
+        
+        if (nomeRam === "N/D" || isNaN(dataRam.getTime())) return; // Pula RAMs inválidas
+
+        const dataIntervencao = pacientesAlvo[prontuario];
+        const diasRelativos = Math.floor((dataRam.getTime() - dataIntervencao) / ONE_DAY_MS);
+        const patient = patientMap[prontuario];
+        let dataNascPacienteMs = patient.dataNasc.getTime();
+        
+        dadosBrutosRAM.push({
+          prontuario: prontuario,
+          nomePaciente: patient.nome,
+          sexo: patient.sexo,
+          éPrematuro: patient.éPrematuro,
+          dataNascPacienteMs: dataNascPacienteMs, 
+          diasRelativos: diasRelativos,
+          nomeRam: nomeRam,
+          gravidade: String(row[idxRamGravidade] || "N/D").trim(),
+          causalidade: String(row[idxRamCausalidade] || "N/D").trim(),
+          desfecho: String(row[idxRamDesfecho] || "N/D").trim(),
+          dataRamMs: dataRam.getTime() 
+        });
+      }
+    });
+    
+    if (dadosBrutosRAM.length === 0) {
+      throw new Error("Nenhuma RAM encontrada para a população selecionada.");
+    }
+
+    // --- 6. Preparar dados para RETORNO ---
+    dadosInjetados = {
+      sucesso: true,
+      info: {
+        medicamento: opcoes.medicamento
+      },
+      rawData: dadosBrutosRAM
+    };
+
+  } catch (e) {
+    Logger.log("ERRO FATAL em buscarDadosParaLaboratorioRAM: " + e.message + "\nStack: " + e.stack);
+    dadosInjetados = {
+      sucesso: false,
+      erro: e.message 
+    };
+  }
+  
+  // Retorna o objeto (sucesso ou erro) como um texto JSON
+  return JSON.stringify(dadosInjetados);
+}
+
+// --- FUNÇÕES REMOVIDAS PARA CORRIGIR CONFLITOS ---
+// buildPatientMap_() <-- Existe em Utils.gs
+// calcularEstatisticas_() <-- Existe em Utils.gs
