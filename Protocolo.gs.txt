@@ -1,454 +1,186 @@
 /**
  * =============================================================
- * MÓDULO 11: ANÁLISE DE FARMACOVIGILÂNCIA (RAMs)
- * (v3 - Refatorado para aba 'FARMACOVIGILÂNCIA' dedicada)
+ * MÓDULO 13: ANALISADOR DE ADESÃO A PROTOCOLO
+ * (v1 - Baseado em pop-up dinâmico, usa Utils.gs)
  * =============================================================
  */
 
 /**
- * Abre o novo pop-up "Análise de RAMs".
+ * FUNÇÃO 1: Abre o pop-up "Wizard" de Análise de Protocolo.
  */
-function abrirModalAnaliseRAM() {
-  const html = HtmlService.createHtmlOutputFromFile('AnaliseRAM')
-    .setWidth(550)
-    .setHeight(550);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Análise de Farmacovigilância');
+function abrirModalAnaliseProtocolo() {
+  const html = HtmlService.createHtmlOutputFromFile('AnaliseProtocolo')
+    .setWidth(800)  // Largura do pop-up
+    .setHeight(600); // Altura do pop-up
+    
+  SpreadsheetApp.getUi().showModalDialog(html, 'Analisador de Adesão ao Protocolo');
 }
 
+
 /**
- * Função principal do "Construtor de Relatório de RAMs".
- * @param {object} opcoes - Objeto com { modulosEstaticos: [], moduloTemporal: {} }
+ * FUNÇÃO 2 (PRINCIPAL): Executa a análise de adesão.
+ * Chamada pelo pop-up 'AnaliseProtocolo.html'
  */
-function gerarAnaliseRAM(opcoes) {
+function gerarAnaliseAdesao(opcoes) {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // --- 1. Preparar a Aba de Relatório ---
-  const nomeRelatorio = "Relatório de RAMs";
-  let reportSheet = ss.getSheetByName(nomeRelatorio);
-  if (reportSheet) reportSheet.clear();
-  else reportSheet = ss.insertSheet(nomeRelatorio);
-  ss.setActiveSheet(reportSheet);
-  reportSheet.getRange("B1").setValue("Relatório de Farmacovigilância (RAMs) Gerado em: " + new Date().toLocaleString())
-      .setFontWeight("bold").setFontSize(14);
-  // --- 2. Ler os Dados (DE DUAS FONTES) ---
+  Logger.log(`Iniciando 'gerarAnaliseAdesao' para ${opcoes.medicamento}`);
   
-  // Fonte 1: Dados dos Pacientes (da Tabela)
-  const patientMap = buildPatientMap_(); // Do Utils.gs
-  
-  // Fonte 2: Eventos de RAM (da nova aba FARMACOVIGILÂNCIA)
-  const ramSheet = ss.getSheetByName(CONFIG.sheets.ramTab); // <-- MUDANÇA
-  if (!ramSheet) throw new Error("Aba '" + CONFIG.sheets.ramTab + "' não encontrada.");
-  
-  const ramData = ramSheet.getDataRange().getValues();
-  const ramHeaders = ramData.shift(); // Pega cabeçalhos
-
-  // Encontra colunas essenciais na aba RAM
-  const idxRamProntuario = ramHeaders.indexOf(CONFIG.headers.prontuario);
-  const idxRamTipo = ramHeaders.indexOf(CONFIG.headers.ramTipo);
-  const idxRamData = ramHeaders.indexOf(CONFIG.headers.ramData);
-  const idxRamGravidade = ramHeaders.indexOf(CONFIG.headers.ramGravidade);
-  const idxRamDesfecho = ramHeaders.indexOf(CONFIG.headers.ramDesfecho);
-  if (idxRamProntuario === -1 || idxRamTipo === -1) {
-    throw new Error(`Colunas '${CONFIG.headers.prontuario}' e/ou '${CONFIG.headers.ramTipo}' não encontradas na aba '${CONFIG.sheets.ramTab}'.`);
-  }
-  
-  // Filtra 'ramData' para conter APENAS eventos válidos (com prontuário e tipo)
-  const eventosRAM = ramData.filter(row => row[idxRamProntuario] && row[idxRamTipo]);
-  Logger.log(`Encontrados ${eventosRAM.length} eventos de RAM para análise.`);
-
-  let currentRow = 4; // Linha inicial
-  const chartWidth = 550;
-  const chartHeight = 350;
-  let erros = []; 
-
-  // --- 3. Roteador de Módulos Estáticos ---
-  
-  // --- MÓDULO: Frequência por Tipo de RAM ---
-  if (opcoes.modulosEstaticos.includes("freqPorTipo")) {
-    Logger.log("Tentando gerar 'freqPorTipo'...");
-    const contagem = {};
-    eventosRAM.forEach(row => {
-      const ram = row[idxRamTipo] || "N/D";
-      contagem[ram] = (contagem[ram] || 0) + 1;
-    });
-    const dadosGrafico = [["Tipo de RAM", "Contagem"]];
-    Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
-    if (dadosGrafico.length > 1) {
-      currentRow = gerarGrafico_(reportSheet, "Frequência por Tipo de RAM", Charts.ChartType.PIE, dadosGrafico, currentRow, chartWidth, chartHeight);
-    }
-  }
-  
-  // --- MÓDULO: Incidência por Sexo ---
-  if (opcoes.modulosEstaticos.includes("freqPorSexo")) {
-    Logger.log("Tentando gerar 'freqPorSexo'...");
-    if (idxRamTipo === -1) { // idxSexo é verificado dentro do loop
-      erros.push("Módulo 'Incidência por Sexo' pulado: Coluna '" + CONFIG.headers.ramTipo + "' não encontrada.");
-    } else {
-      const contagem = {};
-      eventosRAM.forEach(row => {
-        const prontuario = row[idxRamProntuario];
-        const patient = patientMap[prontuario]; // Junta com dados da Tabela
-        const sexo = (patient && patient.sexo) ? patient.sexo : "N/D";
-        contagem[sexo] = (contagem[sexo] || 0) + 1;
-      });
-      const dadosGrafico = [["Sexo", "Nº de RAMs"]];
-      Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
-      if (dadosGrafico.length > 1) {
-        currentRow = gerarGrafico_(reportSheet, "Incidência de RAMs por Sexo", Charts.ChartType.COLUMN, dadosGrafico, currentRow, chartWidth, chartHeight);
-      }
-    }
-  }
-
-  // --- MÓDULO: Incidência por Prematuridade ---
-  if (opcoes.modulosEstaticos.includes("freqPorPrematuridade")) {
-    Logger.log("Tentando gerar 'freqPorPrematuridade'...");
-    // idxGestacao é verificado dentro do loop
-    const contagem = {};
-    eventosRAM.forEach(row => {
-       const prontuario = row[idxRamProntuario];
-       const patient = patientMap[prontuario]; // Junta com dados da Tabela
-       let classificacao = "Padrão/Outro";
-       if (patient && patient.éPrematuro) classificacao = "Prematuro";
-       else if (patient) classificacao = "Padrão";
-       
-       contagem[classificacao] = (contagem[classificacao] || 0) + 1;
-    });
-    const dadosGrafico = [["Classificação", "Nº de RAMs"]];
-    Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
-    if (dadosGrafico.length > 1) {
-       currentRow = gerarGrafico_(reportSheet, "Incidência de RAMs por Prematuridade", Charts.ChartType.COLUMN, dadosGrafico, currentRow, chartWidth, chartHeight);
-    }
-  }
-
-  // --- MÓDULO: Frequência por Gravidade ---
-  if (opcoes.modulosEstaticos.includes("freqPorGravidade")) {
-    Logger.log("Tentando gerar 'freqPorGravidade'...");
-    if (idxRamGravidade === -1) {
-      erros.push("Módulo 'Frequência por Gravidade' pulado: Coluna '" + CONFIG.headers.ramGravidade + "' não encontrada.");
-    } else {
-      const agregador = {};
-      const todasGravidades = new Set();
-      eventosRAM.forEach(row => {
-         const ram = row[idxRamTipo];
-         const gravidade = row[idxRamGravidade] || "N/D";
-         if (!agregador[ram]) agregador[ram] = {};
-         agregador[ram][gravidade] = (agregador[ram][gravidade] || 0) + 1;
-         todasGravidades.add(gravidade);
-      });
-      const gravidadesOrdenadas = Array.from(todasGravidades).sort();
-      const dadosGrafico = [["Tipo de RAM", ...gravidadesOrdenadas]];
-      Object.keys(agregador).sort().forEach(ram => {
-        const linha = [ram];
-        gravidadesOrdenadas.forEach(gravidade => {
-          linha.push(agregador[ram][gravidade] || 0);
-        });
-        dadosGrafico.push(linha);
-      });
-      if (dadosGrafico.length > 1) {
-         currentRow = gerarGrafico_(reportSheet, "Frequência de RAMs por Gravidade", Charts.ChartType.COLUMN, dadosGrafico, currentRow, chartWidth, chartHeight, true);
-         // true = stacked
-      }
-    }
-  }
-  
-  // --- MÓDULO: Desfecho das RAMs Graves ---
-  if (opcoes.modulosEstaticos.includes("desfechoDasGraves")) {
-    Logger.log("Tentando gerar 'desfechoDasGraves'...");
-    if (idxRamDesfecho === -1 || idxRamGravidade === -1) {
-      erros.push("Módulo 'Desfecho das Graves' pulado: Coluna '" + CONFIG.headers.ramDesfecho + "' ou '" + CONFIG.headers.ramGravidade + "' não encontrada.");
-    } else {
-      const contagem = {};
-      eventosRAM.forEach(row => {
-         const gravidade = row[idxRamGravidade];
-         if (gravidade === "Grave/Séria") {
-           const desfecho = row[idxRamDesfecho] || "Desconhecido";
-           contagem[desfecho] = (contagem[desfecho] || 0) + 1;
-         }
-      });
-      const dadosGrafico = [["Desfecho", "Contagem"]];
-      Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
-      if (dadosGrafico.length > 1) {
-         currentRow = gerarGrafico_(reportSheet, "Desfecho das RAMs Graves/Sérias", Charts.ChartType.PIE, dadosGrafico, currentRow, chartWidth, chartHeight);
-      }
-    }
-  }
-
-  // --- 4. Roteador de Módulo Temporal ---
-  if (opcoes.moduloTemporal.medicamento) {
-    Logger.log("Tentando gerar 'Análise Temporal de RAMs'...");
-    if (idxRamData === -1) {
-      erros.push("Módulo 'Análise Temporal' pulado: Coluna '" + CONFIG.headers.ramData + "' não encontrada na aba '" + CONFIG.sheets.ramTab + "'.");
-    } else {
-      try {
-        // Passa os 'eventosRAM' já filtrados e os cabeçalhos da aba RAM
-        const dadosTemporais = calcularTendemciaRAMs_(opcoes.moduloTemporal, eventosRAM, ramHeaders);
-        if (dadosTemporais.length > 1) {
-          currentRow = gerarGrafico_(reportSheet, `Tendência de RAMs vs. ${opcoes.moduloTemporal.medicamento}`, Charts.ChartType.LINE, dadosTemporais, currentRow, chartWidth, chartHeight);
-        } else {
-          erros.push(`Não foi possível gerar a Análise Temporal (sem dados de RAM com data).`);
-        }
-      } catch (e) {
-        erros.push("Erro na Análise Temporal: " + e.message);
-        Logger.log("Erro na Análise Temporal de RAMs: " + e.message);
-      }
-    }
-  }
-
-  // --- 5. Finalização ---
-  let msgFinal = `Relatório de RAMs gerado.`;
-  if (erros.length > 0) {
-    msgFinal += "\n\nAvisos:\n" + erros.join('\n');
-    Logger.log("Erros/Avisos do relatório de RAMs: " + erros.join(', '));
-  }
-  
-  ui.alert("Sucesso!", msgFinal, ui.ButtonSet.OK);
-  return "Sucesso";
-}
-
-
-/**
- * HELPER TEMPORAL: Calcula a tendência de RAMs.
- * (v3 - LÊ DA NOVA ABA 'FARMACOVIGILÂNCIA')
- * @return {Array} Dados prontos para o gráfico.
- */
-function calcularTendemciaRAMs_(opcoesTemporal, eventosRAM, ramHeaders) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-  // --- A. Encontrar Data Início (Dia 0) ---
-  const prescricaoSheet = ss.getSheetByName(CONFIG.sheets.prescricao);
-  if (!prescricaoSheet) throw new Error("Aba '" + CONFIG.sheets.prescricao + "' não encontrada.");
-  
-  const prescricaoData = prescricaoSheet.getDataRange().getValues();
-  const hPresc = prescricaoData.shift();
-  const idxPrescPront = hPresc.indexOf(CONFIG.headers.prontuario);
-  const idxPrescData = hPresc.indexOf(CONFIG.headers.dataInicio);
-  const idxPrescMed = hPresc.indexOf(CONFIG.headers.medicamento);
-
-  const pacientesAlvo = {};
-  // { "prontuario": 123456789 (timestamp) }
-  prescricaoData.forEach(row => {
-    const prontuario = row[idxPrescPront];
-    const medicamento = row[idxPrescMed];
-    const dataInicio = new Date(row[idxPrescData]);
-    if (medicamento === opcoesTemporal.medicamento) {
-      if (!pacientesAlvo[prontuario] || dataInicio < pacientesAlvo[prontuario]) {
-        pacientesAlvo[prontuario] = dataInicio.getTime(); 
-      }
-    }
-  });
-  // --- B. Encontrar Data da RAM (usando cabeçalhos da aba RAM) ---
-  const idxRamData = ramHeaders.indexOf(CONFIG.headers.ramData);
-  const idxProntuario = ramHeaders.indexOf(CONFIG.headers.prontuario);
-  
-  // --- C. Agrupar (Bucket) RAMs ---
-  const buckets = {};
-  // { "-1": 2, "0": 5, "1": 3 } (Contagem, não média)
-
-  eventosRAM.forEach(row => { // Usa 'eventosRAM' pré-filtrados
-    const prontuario = row[idxProntuario];
-    
-    // Verifica se este paciente está na coorte do medicamento
-    if (pacientesAlvo[prontuario]) {
-      const dataRam = new Date(row[idxRamData]);
-      if (isNaN(dataRam.getTime())) return; // Pula se a data da RAM for inválida
-      
-      const dataIntervencao = pacientesAlvo[prontuario];
-      const diasRelativos = Math.floor((dataRam.getTime() - dataIntervencao) / ONE_DAY_MS);
-      
-      let bucketId;
-      if (opcoesTemporal.agrupamento === "semana") bucketId = Math.floor(diasRelativos / 7);
-      else if (opcoesTemporal.agrupamento === "mes") bucketId = Math.floor(diasRelativos / 30.44);
-      else bucketId = diasRelativos;
-      
-      buckets[bucketId] = (buckets[bucketId] || 0) + 1;
-    }
-  });
-  // --- D. Formatar para Gráfico ---
-  const nomeEixoX = `Período (${opcoesTemporal.agrupamento})`;
-  const dadosGrafico = [[nomeEixoX, "Contagem de RAMs", { role: 'annotation' }]];
-  const bucketsOrdenados = Object.keys(buckets).map(Number).sort((a, b) => a - b);
-  bucketsOrdenados.forEach(bucketId => {
-    const contagem = buckets[bucketId];
-    let anotacao = null;
-    if (bucketId === 0) anotacao = "Início da Medicação";
-    dadosGrafico.push([bucketId, contagem, anotacao]);
-  });
-  return dadosGrafico;
-}
-
-/**
- * =============================================================
- * MÓDULO 11-B: LABORATÓRIO DE SEGURANÇA (RAMs) INTERATIVO
- * (v1 - Criativo)
- * =============================================================
- */
-
-/**
- * FUNÇÃO 1: Guarda as opções e abre o modal do Laboratório de RAMs.
- * (Chamada pelo AnaliseMedicamento.html)
- */
-function abrirModalLaboratorioRAM(opcoes) {
   try {
-    // Guarda as opções no cache (para o 'Dia 0' e filtros)
-    const cache = CacheService.getScriptCache();
-    cache.put('opcoesRamLabPendente', JSON.stringify(opcoes), 300); 
-
-    // Abre o novo modal do gráfico de RAMs
-    const html = HtmlService.createHtmlOutputFromFile('LaboratorioRAM.html')
-      .setWidth(1200) 
-      .setHeight(700);
-    SpreadsheetApp.getUi().showModalDialog(html, `Laboratório de Segurança (RAMs)`);
+    // --- 1. Ler Mapas e Dados ---
+    const patientMap = buildPatientMap_(); // Do Utils.gs
     
-    return { sucesso: true };
-  } catch (e) {
-    Logger.log("Erro em abrirModalLaboratorioRAM: " + e.message);
-    throw new Error("Falha ao abrir o modal do Laboratório de RAMs: " + e.message);
-  }
-}
-
-
-/**
- * FUNÇÃO 2: Busca e processa todos os dados de RAM para a coorte.
- * (Chamada pelo LaboratorioRAM.html)
- */
-function buscarDadosParaLaboratorioRAM() {
-  Logger.log(`Iniciando 'buscarDadosParaLaboratorioRAM (v1)'...`);
-  
-  let dadosInjetados = {};
-  let opcoes;
-
-  try {
-    // 1. Recupera as opções do cache
-    const cache = CacheService.getScriptCache();
-    const opcoesString = cache.get('opcoesRamLabPendente');
-    if (!opcoesString) {
-      throw new Error("Sessão expirada ou opções não encontradas. Por favor, feche e abra o configurador novamente.");
-    }
-    opcoes = JSON.parse(opcoesString);
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // --- 2. Carregar Dados ---
     const prescricaoSheet = ss.getSheetByName(CONFIG.sheets.prescricao);
-    const ramSheet = ss.getSheetByName(CONFIG.sheets.ramTab);
     if (!prescricaoSheet) throw new Error("Aba '" + CONFIG.sheets.prescricao + "' não encontrada.");
-    if (!ramSheet) throw new Error("Aba '" + CONFIG.sheets.ramTab + "' não encontrada.");
-
-    // Helpers
-    const prescricaoData = prescricaoSheet.getDataRange().getValues();
-    const ramData = ramSheet.getDataRange().getValues();
-    const patientMap = buildPatientMap_(); // <-- Agora usa a função do Utils.gs
     
-    // Índices da Prescrição (para "Dia 0")
-    const hPresc = prescricaoData.shift(); // Tira o cabeçalho
-    const idxPrescPront = hPresc.indexOf(CONFIG.headers.prontuario);
-    const idxPrescData = hPresc.indexOf(CONFIG.headers.dataInicio);
-    const idxPrescMed = hPresc.indexOf(CONFIG.headers.medicamento);
-    if (idxPrescPront === -1 || idxPrescData === -1 || idxPrescMed === -1) {
-      throw new Error("Colunas essenciais (Prontuário, Data Início, Medicamento) não encontradas na aba 'Prescrição de Doses'.");
+    const prescricaoData = prescricaoSheet.getDataRange().getValues();
+    const hPresc = prescricaoData.shift();
+    const idxPront = hPresc.indexOf(CONFIG.headers.prontuario);
+    const idxMed = hPresc.indexOf(CONFIG.headers.medicamento);
+    const idxTaxa = hPresc.indexOf(CONFIG.headers.colTaxaResultante); // <-- LÊ A TAXA JÁ CALCULADA
+
+    if (idxPront === -1 || idxMed === -1 || idxTaxa === -1) {
+      throw new Error(`Aba '${CONFIG.sheets.prescricao}' precisa das colunas: '${CONFIG.headers.prontuario}', '${CONFIG.headers.medicamento}' e '${CONFIG.headers.colTaxaResultante}'.`);
     }
 
-    // Índices de RAM (para dados do evento)
-    const hRam = ramData.shift(); // Tira o cabeçalho
-    const idxRamPront = hRam.indexOf(CONFIG.headers.prontuario);
-    const idxRamData = hRam.indexOf(CONFIG.headers.ramData);
-    const idxRamTipo = hRam.indexOf(CONFIG.headers.ramTipo);
-    const idxRamGravidade = hRam.indexOf(CONFIG.headers.ramGravidade);
-    const idxRamCausalidade = hRam.indexOf(CONFIG.headers.causalidadeRam);
-    const idxRamDesfecho = hRam.indexOf(CONFIG.headers.ramDesfecho);
-    if (idxRamPront === -1 || idxRamData === -1 || idxRamTipo === -1 || idxRamGravidade === -1 || idxRamCausalidade === -1) {
-       throw new Error(`Colunas essenciais não encontradas na aba '${CONFIG.sheets.ramTab}'. Verifique: '${CONFIG.headers.prontuario}', '${CONFIG.headers.ramData}', '${CONFIG.headers.ramTipo}', '${CONFIG.headers.ramGravidade}', '${CONFIG.headers.causalidadeRam}'.`);
-    }
-
-    // --- 3. Encontrar "Dia 0" (Início da Intervenção) ---
-    const pacientesAlvo = {};
-    const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-    prescricaoData.forEach(row => {
-      const prontuario = String(row[idxPrescPront] || "").trim();
-      const medicamento = row[idxPrescMed];
-      const dataInicio = new Date(row[idxPrescData]);
-      if (medicamento === opcoes.medicamento && prontuario && !isNaN(dataInicio.getTime())) { 
-        if (!pacientesAlvo[prontuario] || dataInicio.getTime() < pacientesAlvo[prontuario]) {
-          pacientesAlvo[prontuario] = dataInicio.getTime(); 
-        }
-      }
-    });
-
-    // --- 4. Aplicar Filtros de População ---
-    let prontuariosValidos = Object.keys(pacientesAlvo);
-    prontuariosValidos = prontuariosValidos.filter(prontuario => {
+    // --- 2. Encontrar Pacientes-Alvo (Baseado nos Filtros) ---
+    const prontuariosFiltrados = Object.keys(patientMap).filter(prontuario => {
       const patient = patientMap[prontuario];
-      if (!patient) return false; 
-      if (!patient.dataNasc) return false; 
-      if (opcoes.filtrosPop.sexo !== 'todos' && patient.sexo !== opcoes.filtrosPop.sexo) return false;
-      const éPrematuro = patient.éPrematuro;
-      if (opcoes.filtrosPop.prematuridade === 'prematuro' && !éPrematuro) return false;
-      if (opcoes.filtrosPop.prematuridade === 'padrao' && éPrematuro) return false;
+      
+      // Filtro de Sexo
+      if (opcoes.filtros.sexo !== 'todos' && patient.sexo !== opcoes.filtros.sexo) {
+        return false;
+      }
+      
+      // Filtro de CID (ainda não implementado, mas aqui ficaria)
+      // if (opcoes.filtros.cid && patient.cid !== opcoes.filtros.cid) {
+      //   return false;
+      // }
+      
       return true;
     });
-    if (prontuariosValidos.length === 0) {
-      throw new Error("Nenhum paciente encontrado para '" + opcoes.medicamento + "' que corresponda aos seus filtros (verifique se todos têm data de nascimento).");
-    }
     
-    // --- 5. Recolher dados brutos de RAM ---
-    const dadosBrutosRAM = [];
-    ramData.forEach(row => {
-      const prontuario = String(row[idxRamPront] || "").trim();
-      
-      // Filtra apenas RAMs dos pacientes da coorte
-      if (prontuariosValidos.includes(prontuario)) { 
-        const dataRam = new Date(row[idxRamData]);
-        const nomeRam = String(row[idxRamTipo] || "N/D").trim();
-        
-        if (nomeRam === "N/D" || isNaN(dataRam.getTime())) return; // Pula RAMs inválidas
+    Logger.log(`${prontuariosFiltrados.length} pacientes encontrados após filtros.`);
 
-        const dataIntervencao = pacientesAlvo[prontuario];
-        const diasRelativos = Math.floor((dataRam.getTime() - dataIntervencao) / ONE_DAY_MS);
-        const patient = patientMap[prontuario];
-        let dataNascPacienteMs = patient.dataNasc.getTime();
+    // --- 3. Analisar Cada Prescrição ---
+    // Estrutura: { "Protocolo 1": { Dentro: 0, Acima: 0, Abaixo: 0, Desvios: [] }, ... }
+    const resultados = {};
+    opcoes.protocolos.forEach(p => {
+      resultados[p.nome] = { Dentro: 0, Acima: 0, Abaixo: 0, Desvios: [] };
+    });
+
+    prescricaoData.forEach(row => {
+      const prontuario = String(row[idxPront] || "").trim();
+      const medicamento = row[idxMed];
+      const taxa = parseFloat(row[idxTaxa]);
+      
+      // Verifica se a dose é relevante (Paciente filtrado, Medicamento correto, Taxa válida)
+      if (prontuariosFiltrados.includes(prontuario) &&
+          medicamento === opcoes.medicamento &&
+          !isNaN(taxa)) {
         
-        dadosBrutosRAM.push({
-          prontuario: prontuario,
-          nomePaciente: patient.nome,
-          sexo: patient.sexo,
-          éPrematuro: patient.éPrematuro,
-          dataNascPacienteMs: dataNascPacienteMs, 
-          diasRelativos: diasRelativos,
-          nomeRam: nomeRam,
-          gravidade: String(row[idxRamGravidade] || "N/D").trim(),
-          causalidade: String(row[idxRamCausalidade] || "N/D").trim(),
-          desfecho: String(row[idxRamDesfecho] || "N/D").trim(),
-          dataRamMs: dataRam.getTime() 
+        // Compara com CADA protocolo que o usuário criou
+        opcoes.protocolos.forEach(protocolo => {
+          if (taxa < protocolo.min) {
+            resultados[protocolo.nome].Abaixo++;
+            // Guarda a linha do desvio
+            resultados[protocolo.nome].Desvios.push([
+              prontuario,
+              patientMap[prontuario].nome, // Pega o nome do mapa
+              taxa.toFixed(2),
+              "Abaixo"
+            ]);
+          } else if (taxa > protocolo.max) {
+            resultados[protocolo.nome].Acima++;
+            resultados[protocolo.nome].Desvios.push([
+              prontuario,
+              patientMap[prontuario].nome,
+              taxa.toFixed(2),
+              "Acima"
+            ]);
+          } else {
+            resultados[protocolo.nome].Dentro++;
+          }
         });
       }
     });
+
+    // --- 4. Gerar a Aba de Relatório ---
+    const nomeRelatorio = `Adesão - ${opcoes.medicamento.substring(0, 20)}`;
+    let reportSheet = ss.getSheetByName(nomeRelatorio);
+    if (reportSheet) reportSheet.clear();
+    else reportSheet = ss.insertSheet(nomeRelatorio);
+    ss.setActiveSheet(reportSheet);
+
+    reportSheet.getRange("B1").setValue(`Relatório de Adesão ao Protocolo: ${opcoes.medicamento}`)
+      .setFontWeight("bold").setFontSize(16);
     
-    if (dadosBrutosRAM.length === 0) {
-      throw new Error("Nenhuma RAM encontrada para a população selecionada.");
-    }
-
-    // --- 6. Preparar dados para RETORNO ---
-    dadosInjetados = {
-      sucesso: true,
-      info: {
-        medicamento: opcoes.medicamento
-      },
-      rawData: dadosBrutosRAM
-    };
-
+    let currentRow = 4;
+    
+    // Loop para cada protocolo
+    opcoes.protocolos.forEach(protocolo => {
+      const nome = protocolo.nome;
+      const res = resultados[nome];
+      const total = res.Dentro + res.Acima + res.Abaixo;
+      
+      if (total === 0) {
+        reportSheet.getRange(currentRow, 2).setValue(`Protocolo: ${nome} (Min: ${protocolo.min}, Max: ${protocolo.max})`)
+          .setFontWeight("bold").setFontSize(14).setBackground("#eeeeee");
+        currentRow++;
+        reportSheet.getRange(currentRow, 2).setValue("Nenhuma dose encontrada para este protocolo e filtros.");
+        currentRow += 2;
+        return; // Pula para o próximo protocolo
+      }
+      
+      // Título da Secção
+      reportSheet.getRange(currentRow, 2).setValue(`Protocolo: ${nome} (Min: ${protocolo.min}, Max: ${protocolo.max})`)
+        .setFontWeight("bold").setFontSize(14).setBackground("#eeeeee");
+      currentRow++;
+      
+      // Tabela do Gráfico de Pizza
+      const dadosGrafico = [
+        ["Categoria", "Contagem"],
+        ["Dentro do Protocolo", res.Dentro],
+        ["Acima do Protocolo", res.Acima],
+        ["Abaixo do Protocolo", res.Abaixo]
+      ];
+      
+      // Gera o Gráfico de Pizza (usando o helper do Utils.gs)
+      currentRow = gerarGrafico_(reportSheet, `Adesão: ${nome}`, Charts.ChartType.PIE, dadosGrafico, currentRow, 550, 350);
+      
+      // Gera a Tabela de Desvios
+      if (res.Desvios.length > 0) {
+        reportSheet.getRange(currentRow, 2).setValue("Registos Fora do Protocolo:");
+        currentRow++;
+        const headersDesvio = ["Prontuário", "Paciente", "Taxa (mg/kg)", "Status"];
+        const rangeDesvio = reportSheet.getRange(currentRow, 2, res.Desvios.length + 1, headersDesvio.length);
+        
+        rangeDesvio.setValues([headersDesvio, ...res.Desvios]);
+        
+        // Formata a tabela de desvios
+        rangeDesvio.setBorder(true, true, true, true, true, true);
+        reportSheet.getRange(currentRow, 2, 1, headersDesvio.length).setFontWeight("bold").setBackground("#fff2cc");
+        
+        // Pinta as linhas de "Acima" e "Abaixo" de vermelho
+        for (let i = 0; i < res.Desvios.length; i++) {
+          if (res.Desvios[i][3] === "Acima" || res.Desvios[i][3] === "Abaixo") {
+            reportSheet.getRange(currentRow + 1 + i, 2, 1, headersDesvio.length).setBackground("#f4cccc"); // Vermelho claro
+          }
+        }
+        
+        currentRow += res.Desvios.length + 2; // Pula para a próxima secção
+      } else {
+        reportSheet.getRange(currentRow, 2).setValue("100% de Adesão: Nenhum desvio encontrado.");
+        currentRow += 2;
+      }
+    });
+    
+    ui.alert("Sucesso!", `O Relatório de Adesão '${nomeRelatorio}' foi criado.`, ui.ButtonSet.OK);
+    
   } catch (e) {
-    Logger.log("ERRO FATAL em buscarDadosParaLaboratorioRAM: " + e.message + "\nStack: " + e.stack);
-    dadosInjetados = {
-      sucesso: false,
-      erro: e.message 
-    };
+    Logger.log("ERRO FATAL em gerarAnaliseAdesao: " + e.message + "\nStack: " + e.stack);
+    ui.alert("Erro no Script", "Ocorreu um erro: " + e.message, ui.ButtonSet.OK);
+    throw e;
   }
-  
-  // Retorna o objeto (sucesso ou erro) como um texto JSON
-  return JSON.stringify(dadosInjetados);
 }
-
-// --- FUNÇÕES REMOVIDAS PARA CORRIGIR CONFLITOS ---
-// buildPatientMap_() <-- Existe em Utils.gs
-// calcularEstatisticas_() <-- Existe em Utils.gs
