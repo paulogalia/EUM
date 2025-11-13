@@ -9,10 +9,10 @@
  * FUNÇÃO 1: Abre o pop-up "Wizard" de Análise de Custo-Efetividade.
  */
 function abrirModalCustoEfetividade() {
-  const html = HtmlService.createHtmlOutputFromFile('AnaliseCusto')
-    .setWidth(800)  // Largura do pop-up
-    .setHeight(700); // Altura do pop-up
-    
+  const html = HtmlService.createTemplateFromFile('AnaliseCusto') // <-- CORREÇÃO (O seu ficheiro chama-se AnaliseCusto.html)
+    .evaluate() // <-- CORREÇÃO
+    .setWidth(800)
+    .setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, 'Wizard de Custo-Efetividade');
 }
 
