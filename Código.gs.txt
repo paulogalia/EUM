@@ -1,41 +1,45 @@
 // --- CONFIGURAÇÃO GLOBAL ---
-// OBRIGATÓRIO: Este bloco deve estar no topo do arquivo,
-// fora de qualquer função, para que todos os módulos o acessem.
 const CONFIG = { 
   sheets: {
     prescricao: "Prescrição de Doses",
     peso: "Registro de Peso",
-    pacientes: "Pacientes", // Aba com Nome e Prontuário
-    tabelaResumo: "MENU PRINCIPAL",  // Aba com dados consolidados
+    pacientes: "Pacientes",
+    tabelaResumo: "MENU PRINCIPAL",
     exames: "Exames",
     examesRef: "Exames_Referencia",
-    ramTab: "FARMACOVIGILÂNCIA" // <-- O nome da sua nova aba
+    ramTab: "FARMACOVIGILÂNCIA",
+    dicionarioMeds: "DICIONÁRIO_MEDICAMENTOS" // <-- FASE 1: Adicionado
   },
   headers: {
-    // Cabeçalhos da aba 'Pacientes'
+    // Aba 'Pacientes'
     nomePaciente: "PACIENTE",
-    prontuario: "PRONTUÁRIO", // CRÍTICO: Verifique se o acento está correto na sua planilha
-    dataNascimento: "DATA_NASCIMENTO", // <-- IMPORTANTE: CONFIRME ESTE NOME
+    prontuario: "PRONTUÁRIO",
+dataNascimento: "DATA_NASCIMENTO",
     gestacao: "IDADE GESTACIONAL",
     sexo: "SEXO",
-    ramTipo: "RAM", // A coluna com o tipo/categoria da RAM
-    ramData: "DATA_RAM", // (NOVA COLUNA NECESSÁRIA para análise temporal)
+    
+    // Aba 'FARMACOVIGILÂNCIA'
+    ramTipo: "RAM",
+    ramData: "DATA_RAM",
     ramGravidade: "GRAVIDADE",
     ramDesfecho: "DESFECHO",
-    idEventoRam: "ID_EVENTO_RAM",       // Na aba 'TABELA'
-    causalidadeRam: "CAUSALIDADE_RAM", // Na aba 'TABELA'
+    idEventoRam: "ID_EVENTO_RAM",
+    causalidadeRam: "CAUSALIDADE_RAM",
 
-    // Cabeçalhos da aba 'Prescrição de Doses'
-    dataInicio: "DATA_INICIO",
-    dataFim: "DATA_FIM", // Coluna necessária para calcular dias de tratamento
-    fabricante: "FABRICANTE", // Sua nova coluna de "Marca"
+    // Aba 'Prescrição de Doses' (Refatorado para Fase 2)
+    dataInicio: "DATA_INICIO", // Nome padrão que pode ser mapeado
+dataFim: "DATA_FIM",
     medicamento: "MEDICAMENTO",
-    doseAdministrada: "DOSE_ADMINISTRADA_mg",
+    codigoMedicamento: "CODIGO_MED",     // <-- FASE 2: Novo
+    dosePrescrita: "DOSE_PRESCRITA",     // <-- FASE 2: Novo (ex: 5)
+    unidadePrescrita: "UN_PRESCRITA",   // <-- FASE 2: Novo (ex: "ML")
+    // 'doseAdministrada_mg' e 'colTaxaResultante' removidos
     
-    colPesoReferencia: "PESO_REFERENCIA_kg",
-    colTaxaResultante: "TAXA_RESULTANTE_mg_kg",
-    sexo: "SEXO",
-    classificacao: "Classificação Prematuridade",
+    // Aba 'Registro de Peso'
+dataPeso: "DATA_AFERICAO",
+    peso: "PESO_kg",
+
+    // Aba 'Exames'
     exameData: "DATA_EXAME",
     exameNome: "NOME_EXAME",
     exameValor: "VALOR_RESULTADO",
@@ -43,160 +47,65 @@ const CONFIG = {
     exameRefMin: "REF_MIN",
     exameRefMax: "REF_MAX",
 
-    // Cabeçalho da aba 'Registro de Peso'
-    dataPeso: "DATA_AFERICAO",
-    peso: "PESO_kg",
-
-    // Cabeçalhos da aba 'Tabela' (resumo)
-    // Verifique se os nomes das colunas na sua aba 'Tabela' batem exatamente com os do PDF/CONFIG
-    analiseClassificacao: "ANÁLISE DE MUDANÇA (1ª -> 2ª TAXA)",
-    custoTotal: "CUSTO TOTAL TRATAMENTO PCTE", // O PDF tem "CUSTO TOTAL AMPOLAS TRATAMENTO PCTE", verifique qual está na sua aba
-    duracaoTratamento: "TRATAMENTO (DIAS)",
-    conclusoes: "CONCLUSÕES",
-    idadeGestacional: "IDADE GESTACIONAL + PERÍODO DE TRATAMENTO", // Adicionado para relatório
-
-    // Cabeçalhos da aba 'Exames_Referencia'
-    exameRefNome: "NOME_EXAME",
-    exameRefTipo: "TIPO_REGRA", // "Padrão" ou "Prematuro Específico"
+    // Aba 'Exames_Referencia'
+exameRefNome: "NOME_EXAME",
+    exameRefTipo: "TIPO_REGRA",
     exameRefMinDias: "IDADE_MIN_DIAS",
     exameRefMaxDias: "IDADE_MAX_DIAS",
     exameRefMinValor: "VALOR_MIN",
-    exameRefMaxValor: "VALOR_MAX"
+    exameRefMaxValor: "VALOR_MAX",
+
+    // (NOVO) Aba 'DICIONÁRIO_MEDICAMENTOS' (Fase 1)
+    dicCodigoMed: "CODIGO_MED",
+    dicNomeAmigavel: "NOME_AMIGAVEL",
+    dicPrincipioAtivo: "PRINCIPIO_ATIVO_ALVO",
+    dicUnPrescrita: "UN_PRESCRITA",
+    dicUnAlvo: "UN_ALVO_CALCULO",
+    dicFatorConversao: "FATOR_CONVERSAO"
   }
 };
+const MASTER_DB_SHEET_ID = "1zKqYVR9seTPy3eyX5CR2xuXZtqSwwvERQn_KX3GK5JM";
 
-const MASTER_DB_SHEET_ID = "1zKqYVR9seTPy3eyX5CR2xuXZtqSwwvERQn_KX3GK5JM"
-
-// --- MÓDULO 1: CÁLCULO AUTOMÁTICO DE TAXA (onEdit) ---
-// (Esta função permanece inalterada)
-function onEdit(e) {
-  if (!e || !e.range) return; // Sai se for uma edição inválida
-
-  const planilha = e.source.getActiveSheet();
-  const celulaEditada = e.range;
-  // Verifica se a edição foi na aba correta e não no cabeçalho
-  if (planilha.getName() !== CONFIG.sheets.prescricao || celulaEditada.getRow() <= 1) return;
-  const cabecalhos = planilha.getRange(1, 1, 1, planilha.getLastColumn()).getValues()[0];
-  const indices = {
-    prontuario: cabecalhos.indexOf(CONFIG.headers.prontuario),
-    dataInicio: cabecalhos.indexOf(CONFIG.headers.dataInicio),
-    doseAdministrada: cabecalhos.indexOf(CONFIG.headers.doseAdministrada),
-    pesoReferencia: cabecalhos.indexOf(CONFIG.headers.colPesoReferencia),
-    taxaResultante: cabecalhos.indexOf(CONFIG.headers.colTaxaResultante)
-  };
-  // Verifica se todos os cabeçalhos necessários foram encontrados
-  if (Object.values(indices).some(index => index === -1)) {
-    Logger.log("Erro no onEdit: Não foi possível encontrar um ou mais cabeçalhos na aba '" + CONFIG.sheets.prescricao + "'. Verifique CONFIG.headers: " + JSON.stringify(indices));
-    return;
-  }
-
-  // Verifica se a célula editada foi a coluna de dose
-  if (celulaEditada.getColumn() !== indices.doseAdministrada + 1) return;
-  const linhaEditada = celulaEditada.getRow();
-  Logger.log(`onEdit: Editado na linha ${linhaEditada} da aba '${CONFIG.sheets.prescricao}'`);
-
-  const prontuario = planilha.getRange(linhaEditada, indices.prontuario + 1).getValue();
-  let dataInicio;
-  let doseAdministrada;
-
-  try {
-    const dataValor = planilha.getRange(linhaEditada, indices.dataInicio + 1).getValue();
-    if (!dataValor) throw new Error("Data de início vazia");
-    dataInicio = new Date(dataValor);
-    if (isNaN(dataInicio.getTime())) throw new Error("Formato de data inválido: " + dataValor);
-
-    const doseValor = planilha.getRange(linhaEditada, indices.doseAdministrada + 1).getValue();
-    if (doseValor === "" || doseValor === null || isNaN(Number(doseValor))) {
-      // Se a dose for apagada, limpa os campos calculados
-      planilha.getRange(linhaEditada, indices.taxaResultante + 1).clearContent().clearNote();
-      planilha.getRange(linhaEditada, indices.pesoReferencia + 1).clearContent();
-      return;
-    }
-    doseAdministrada = Number(doseValor);
-  } catch (err) {
-    Logger.log("Erro ao obter dados da linha " + linhaEditada + ": " + err.message);
-    planilha.getRange(linhaEditada, indices.taxaResultante + 1).setValue("ERRO: " + err.message).clearNote();
-    planilha.getRange(linhaEditada, indices.pesoReferencia + 1).setValue("");
-    return;
-  }
-
-  if (!prontuario) {
-    Logger.log("Prontuário vazio na linha " + linhaEditada);
-    planilha.getRange(linhaEditada, indices.taxaResultante + 1).setValue("Falta Prontuário").clearNote();
-    planilha.getRange(linhaEditada, indices.pesoReferencia + 1).setValue("");
-    return;
-  }
-
-  // Otimização: Usa o mapa de pesos em cache
-  const pesoMaisRecente = findLatestWeightOptimized(prontuario, dataInicio);
-  if (pesoMaisRecente !== null && typeof pesoMaisRecente === 'number' && pesoMaisRecente > 0) {
-    const taxaResultante = doseAdministrada / pesoMaisRecente;
-    planilha.getRange(linhaEditada, indices.pesoReferencia + 1).setValue(pesoMaisRecente).setNumberFormat("0.000");
-    planilha.getRange(linhaEditada, indices.taxaResultante + 1).setValue(taxaResultante).setNumberFormat("0.00").clearNote();
-    Logger.log(`onEdit: Linha ${linhaEditada}, Prontuário ${prontuario}, Data ${dataInicio.toLocaleDateString()}, Dose ${doseAdministrada}, Peso ${pesoMaisRecente}, Taxa ${taxaResultante.toFixed(2)}`);
-  } else {
-    planilha.getRange(linhaEditada, indices.taxaResultante + 1).setValue("Peso não encontrado").setNote(`Nenhum peso encontrado para ${prontuario} em ou antes de ${dataInicio.toLocaleDateString()}`);
-    planilha.getRange(linhaEditada, indices.pesoReferencia + 1).setValue(""); // Limpa o peso de referência
-    Logger.log("Peso não encontrado para prontuário " + prontuario + " em ou antes de " + dataInicio.toLocaleDateString());
-  }
-}
+// --- MÓDULO 1: 'onEdit' ---
+// (REMOVIDO CONFORME FASE 2) 
 
 /**
  * =============================================================
  * MÓDULO PRINCIPAL (Código.gs)
- * (vX - Menu 'onOpen' Refatorado para Módulos Clínicos)
  * =============================================================
  */
 
 /**
  * Cria o menu principal da ferramenta
- * (v-Wizard - Organizado com o "Wizard" de Setup no topo)
  */
 function onOpen(e) {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🔬 Análise EUM')
     
-    // 1. O NOVO "BOTÃO INICIAL"
+    // 1. O WIZARD DE SETUP INICIAL
     .addItem('🚀 Iniciar/Configurar Novo EUM', 'abrirWizardBoasVindas')
     .addSeparator()
 
-    // 2. Acesso Rápido
-    .addItem('👤 Ver Prontuário do Paciente', 'abrirSidebarAnalise')
+    // 2. O NOVO "BLOCO" DE ANÁLISE CENTRAL
+    .addItem('📈 Iniciar Análise (Mapeamento Total)', 'abrirModalAnaliseMedicamento')
     .addSeparator()
 
-    // 3. Módulo de Exames
-    .addSubMenu(ui.createMenu('🧪 Exames')
-        .addItem('Processar Análise de Exames', 'processarAnaliseExames')
-        .addItem('Análise de Tendência (Interativa)', 'abrirModalAnaliseMedicamento')
-     )
-
-    // 4. Módulo de Farmacovigilância (RAMs)
-    .addSubMenu(ui.createMenu('🛡️ Farmacovigilância (RAMs)')
-        .addItem('Avaliar Causalidade de RAM (Naranjo)', 'abrirSidebarAvaliacao_UI')
-        .addItem('Gerar Relatório de RAMs', 'abrirModalAnaliseRAM')
-     )
-
-    // 5. Módulo de Relatórios Gerais / Protocolos
-    .addSubMenu(ui.createMenu('📊 Relatórios & Protocolos')
-        .addItem('Analisar Adesão ao Protocolo', 'abrirModalAnaliseProtocolo')
-        .addItem('Gerar Relatório Modular (Estático)', 'abrirModalRelatorioBuilder')
-     )
-     
-    // 6. MÓDULO DE FARMACOECONOMIA
-    .addSubMenu(ui.createMenu('💰 Farmacoeconomia')
-        .addItem('Análise de Custo-Efetividade (Wizard)', 'abrirModalCustoEfetividade')
+    // 3. FERRAMENTAS DE PRÉ-PROCESSAMENTO E LINHA
+    .addSubMenu(ui.createMenu('🛠️ Ferramentas Auxiliares')
+        .addItem('👤 Ver Perfil do Paciente', 'abrirSidebarAnalise')
+        .addItem('🧪 Processar Análise de Exames', 'processarAnaliseExames')
+        .addItem('🛡️ Avaliar Causalidade (Naranjo)', 'abrirSidebarAvaliacao_UI')
      )
     
-    // (O submenu 'Sistema' foi removido pois suas funções estão agora no Wizard)
-    
-    .addSeparator()
-    .addItem('⚠️ Lembrete', 'mostrarLembrete')
+    // 4. (OPCIONAL) Manter relatórios antigos que não dependem do mapeamento
+    .addSubMenu(ui.createMenu('📊 Relatórios Estáticos (Antigos)')
+        .addItem('Gerar Relatório Modular', 'abrirModalRelatorioBuilder')
+     )
     .addToUi();
 }
 
 /**
- * Função de lembrete adicionada ao menu
- * (v2 - ATUALIZADA para o novo fluxo de RAMs)
+ * Função de lembrete
  */
 function mostrarLembrete() {
   SpreadsheetApp.getUi().alert(
@@ -210,632 +119,177 @@ function mostrarLembrete() {
 
 /**
  * Mostra a sidebar na interface do usuário.
- * (Esta função permanece inalterada)
  */
 function abrirSidebarAnalise() {
-  const html = HtmlService.createHtmlOutputFromFile('SidebarPaciente')
-    .setTitle('Perfil do Paciente');
-  SpreadsheetApp.getUi().showSidebar(html);
+  // CORREÇÃO: Usar .createTemplateFromFile().evaluate()
+  const html = HtmlService.createTemplateFromFile('SidebarPaciente')
+      .evaluate() // <-- CORREÇÃO
+      .setWidth(700)
+      .setHeight(650);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Perfil do Paciente');
 }
 
-
-// --- MÓDULO 3 & 4: PROCESSADOR EM LOTE E ANALISADOR DE PROTOCOLO ---
-
-/**
- * Função principal do processador.
- * Chamada pelo menu "Processar Planilha Inteira".
- * Varre a aba 'Prescrição de Doses' e preenche taxas.
- * Atualiza a coluna de análise na aba 'Tabela'.
- * (Esta função permanece inalterada)
- */
-function processarPlanilhaInteira() {
-  const ui = SpreadsheetApp.getUi();
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000); // Tenta obter o bloqueio por até 30 segundos
-  } catch (e) {
-    ui.alert('Outro processo já está em execução. Por favor, aguarde alguns instantes e tente novamente.');
-    Logger.log('Não foi possível obter o bloqueio para processar: ' + e);
-    return;
-  }
-
-  Logger.log("Iniciando 'processarPlanilhaInteira'...");
-  let modalHtml = HtmlService.createHtmlOutput('<p>Processando dados...<br>Calculando taxas e analisando mudanças de dose.<br>Por favor, aguarde.</p>').setWidth(350).setHeight(120);
-  ui.showModalDialog(modalHtml, 'Processamento em Andamento');
-  SpreadsheetApp.flush(); // Garante que a UI seja atualizada
-
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const prescricaoSheet = ss.getSheetByName(CONFIG.sheets.prescricao);
-    const pesoSheet = ss.getSheetByName(CONFIG.sheets.peso); // Usado pelo `findLatestWeightOptimized`
-    const tabelaResumoSheet = ss.getSheetByName(CONFIG.sheets.tabelaResumo);
-    if (!prescricaoSheet) {
-      throw new Error('Aba "' + CONFIG.sheets.prescricao + '" não encontrada.');
-    }
-    if (!pesoSheet) {
-      Logger.log('Aviso: Aba "' + CONFIG.sheets.peso + '" não encontrada. Não será possível calcular taxas baseadas em peso.');
-    }
-    if (!tabelaResumoSheet) {
-      Logger.log('Aviso: Aba "' + CONFIG.sheets.tabelaResumo + '" não encontrada. A análise de mudança de dose não poderá ser salva nela.');
-    }
-
-    // Pega todos os dados de uma vez
-    const prescricaoRange = prescricaoSheet.getDataRange();
-    const prescricaoData = prescricaoRange.getValues();
-    const tabelaResumoData = tabelaResumoSheet ? tabelaResumoSheet.getDataRange().getValues() : [];
-    // Identifica colunas na aba Prescrição
-    const cabecalhosPresc = prescricaoData[0];
-    const idxProntuarioPresc = cabecalhosPresc.indexOf(CONFIG.headers.prontuario);
-    const idxDataInicioPresc = cabecalhosPresc.indexOf(CONFIG.headers.dataInicio);
-    const idxDosePresc = cabecalhosPresc.indexOf(CONFIG.headers.doseAdministrada);
-    const idxPesoRefPresc = cabecalhosPresc.indexOf(CONFIG.headers.colPesoReferencia);
-    const idxTaxaPresc = cabecalhosPresc.indexOf(CONFIG.headers.colTaxaResultante);
-    // Identifica colunas na aba Tabela (para salvar a análise)
-    let idxProntuarioTabela = -1;
-    let idxAnaliseTabela = -1;
-    if (tabelaResumoSheet && tabelaResumoData.length > 0) {
-      const cabecalhosTabela = tabelaResumoData[0];
-      idxProntuarioTabela = cabecalhosTabela.indexOf(CONFIG.headers.prontuario);
-      idxAnaliseTabela = cabecalhosTabela.indexOf(CONFIG.headers.analiseClassificacao);
-      if (idxProntuarioTabela === -1 || idxAnaliseTabela === -1) {
-        Logger.log("Aviso: Colunas '" + CONFIG.headers.prontuario + "' ou '" + CONFIG.headers.analiseClassificacao + "' não encontradas na aba 'Tabela'. A análise não será salva lá.");
-      }
-    }
-
-    if ([idxProntuarioPresc, idxDataInicioPresc, idxDosePresc, idxPesoRefPresc, idxTaxaPresc].includes(-1)) {
-      throw new Error("Uma ou mais colunas essenciais não foram encontradas na aba '" + CONFIG.sheets.prescricao + "'. Verifique os cabeçalhos e a configuração (CONFIG).");
-    }
-
-    // --- OTIMIZAÇÃO: Pré-carrega o mapa de pesos ---
-    Logger.log("Criando mapa de pesos otimizado...");
-    // Força a criação do mapa de pesos antes do loop
-    buildAndCacheWeightMap(true); // O 'true' força a reconstrução
-    Logger.log("Mapa de pesos criado.");
-
-    let linhasCalculadas = 0;
-    let errosCalculo = [];
-    const dadosAtualizadosPresc = []; // Array para armazenar os dados atualizados para a aba Prescrição
-    dadosAtualizadosPresc.push(cabecalhosPresc); // Mantém o cabeçalho
-
-    // --- MÓDULO 3: Cálculo de Taxa (Iteração e Cálculo) ---
-    Logger.log("Iniciando cálculo de taxas...");
-    for (let i = 1; i < prescricaoData.length; i++) {
-      const linhaOriginal = prescricaoData[i];
-      const linhaNum = i + 1;
-      const linhaAtualizada = linhaOriginal.slice(); // Cria uma cópia para modificar
-
-      const prontuario = String(linhaOriginal[idxProntuarioPresc]).trim();
-      const dose = linhaOriginal[idxDosePresc];
-      let dataInicio;
-
-      // Validações básicas
-      if (!prontuario) {
-        errosCalculo.push(`Linha ${linhaNum} (Prescrição): Prontuário vazio.`);
-        linhaAtualizada[idxTaxaPresc] = "Falta Pront.";
-        dadosAtualizadosPresc.push(linhaAtualizada);
-        continue;
-      }
-      if (typeof dose !== 'number' || isNaN(dose)) {
-        // Não é um erro se a dose estiver vazia, apenas pula o cálculo
-        if (dose !== "") {
-            errosCalculo.push(`Linha ${linhaNum} (Prescrição): Dose inválida ('${dose}')`);
-            linhaAtualizada[idxTaxaPresc] = "Erro Dose";
-        }
-        dadosAtualizadosPresc.push(linhaAtualizada);
-        continue;
-      }
-      try {
-        const dataValor = linhaOriginal[idxDataInicioPresc];
-        if (!dataValor) throw new Error("vazia");
-        dataInicio = new Date(dataValor);
-        if (isNaN(dataInicio.getTime())) throw new Error("inválida: " + dataValor);
-      } catch (err) {
-        errosCalculo.push("Linha " + linhaNum + " (Prescrição): Data de início " + err.message + ".");
-        linhaAtualizada[idxTaxaPresc] = "Erro Data";
-        dadosAtualizadosPresc.push(linhaAtualizada);
-        continue;
-      }
-
-      // --- Usa a função OTIMIZADA ---
-      const pesoMaisRecente = findLatestWeightOptimized(prontuario, dataInicio);
-      if (pesoMaisRecente !== null && typeof pesoMaisRecente === 'number' && pesoMaisRecente > 0) {
-        const taxaCalculada = dose / pesoMaisRecente;
-        linhaAtualizada[idxPesoRefPresc] = pesoMaisRecente;
-        linhaAtualizada[idxTaxaPresc] = taxaCalculada;
-        linhasCalculadas++;
-      } else {
-        // Se a taxa já existe (e é um número), mantém. Senão, marca como "Peso não encontrado".
-        if (typeof linhaOriginal[idxTaxaPresc] !== 'number') {
-          linhaAtualizada[idxTaxaPresc] = "Peso não encontrado";
-        }
-        linhaAtualizada[idxPesoRefPresc] = ""; // Limpa o peso de referência
-      }
-      dadosAtualizadosPresc.push(linhaAtualizada); // Adiciona a linha (atualizada ou não)
-    }
-    Logger.log(`${linhasCalculadas} taxas calculadas/recalculadas.`);
-    // --- Atualiza a planilha de Prescrições com as novas taxas e pesos ---
-    if (linhasCalculadas > 0 || errosCalculo.length > 0) { // Atualiza se houve cálculos ou erros a registrar
-      Logger.log(`Atualizando aba '${CONFIG.sheets.prescricao}'...`);
-      prescricaoSheet.getRange(1, 1, dadosAtualizadosPresc.length, dadosAtualizadosPresc[0].length).setValues(dadosAtualizadosPresc);
-      // Reaplicar formatação numérica
-      prescricaoSheet.getRange(2, idxPesoRefPresc + 1, dadosAtualizadosPresc.length - 1, 1).setNumberFormat("0.000");
-      prescricaoSheet.getRange(2, idxTaxaPresc + 1, dadosAtualizadosPresc.length - 1, 1).setNumberFormat("0.00");
-      SpreadsheetApp.flush();
-      Logger.log("Atualização da aba de prescrição concluída.");
-    } else {
-      Logger.log("Nenhuma taxa precisou ser calculada/atualizada na aba 'Prescrição de Doses'.");
-    }
-
-
-    // --- MÓDULO 4: Análise de Protocolo (executado após calcular todas as taxas) ---
-    // Usa os dados que acabamos de montar (dadosAtualizadosPresc)
-    const dadosParaTabela = {}; // Armazena a ÚLTIMA análise por prontuário
-
-    // Ordena os dados de prescrição por prontuário e data
-    const dadosPrescricaoOrdenados = dadosAtualizadosPresc.slice(1) // Ignora cabeçalho
-      .filter(linha => linha[idxProntuarioPresc] && linha[idxDataInicioPresc]) // Filtra linhas sem prontuário ou data válida
-      .sort((a, b) => {
-        const prontA = String(a[idxProntuarioPresc]).trim();
-        const prontB = String(b[idxProntuarioPresc]).trim();
-        if (prontA < prontB) return -1;
-        if (prontA > prontB) return 1;
-        try {
-          const dateA = new Date(a[idxDataInicioPresc]);
-          const dateB = new Date(b[idxDataInicioPresc]);
-          if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-            return dateA - dateB;
-          }
-        } catch (e) { /* Ignora erro de data inválida na ordenação */ }
-        return 0;
-      });
-    let taxaAnterior = null;
-    let prontuarioAtual = null;
-
-    Logger.log("Iniciando análise de mudança de dose...");
-    for (let i = 0; i < dadosPrescricaoOrdenados.length; i++) {
-      const linha = dadosPrescricaoOrdenados[i];
-      const prontuario = String(linha[idxProntuarioPresc]).trim();
-      const taxaCalculada = (typeof linha[idxTaxaPresc] === 'number' && !isNaN(linha[idxTaxaPresc])) ? linha[idxTaxaPresc] : null;
-      let analiseResultado = "Inválido"; // Padrão
-
-      if (prontuario !== prontuarioAtual) { // Mudou de paciente
-        taxaAnterior = null; // Reseta a taxa anterior
-        prontuarioAtual = prontuario;
-        if (taxaCalculada !== null) {
-          analiseResultado = "Dose Inicial";
-          taxaAnterior = taxaCalculada; // Define a primeira taxa válida como referência
-        }
-      } else { // Mesmo paciente
-        if (taxaCalculada !== null) {
-          if (taxaAnterior === null) {
-            analiseResultado = "Dose Inicial (ou peso ausente antes)";
-            taxaAnterior = taxaCalculada; // Define como a nova referência
-          } else if (Math.abs(taxaCalculada - taxaAnterior) < 0.01) {
-            analiseResultado = "Manteve";
-            // Não atualiza taxaAnterior, pois a taxa é a mesma
-          } else if (taxaCalculada > taxaAnterior) {
-            analiseResultado = "Aumento";
-            taxaAnterior = taxaCalculada; // Atualiza para a próxima comparação
-          } else { // taxaCalculada < taxaAnterior
-            analiseResultado = "Redução";
-            taxaAnterior = taxaCalculada; // Atualiza para a próxima comparação
-          }
-        } else {
-          analiseResultado = "Inválido (sem taxa)"; // Taxa atual é inválida
-        }
-      }
-
-      // Armazena a ÚLTIMA análise VÁLIDA para este paciente
-      if (prontuario && analiseResultado.indexOf("Inválido") === -1) {
-        dadosParaTabela[prontuario] = analiseResultado;
-      }
-    }
-    Logger.log("Análise de mudança de dose concluída. Último status para " + Object.keys(dadosParaTabela).length + " pacientes.");
-    // --- Atualizar a aba 'Tabela' com a ÚLTIMA análise de cada paciente ---
-    let updatesTabela = 0;
-    if (tabelaResumoSheet && idxProntuarioTabela !== -1 && idxAnaliseTabela !== -1) {
-      Logger.log("Atualizando coluna '" + CONFIG.headers.analiseClassificacao + "' na aba 'Tabela'...");
-      const rangeAnalise = tabelaResumoSheet.getRange(2, idxAnaliseTabela + 1, tabelaResumoSheet.getLastRow() - 1, 1);
-      const valoresAtuaisAnalise = rangeAnalise.getValues();
-      const novosValoresAnalise = [];
-      for (let i = 1; i < tabelaResumoData.length; i++) { // Percorre a aba Tabela
-        const prontuarioTabela = String(tabelaResumoData[i][idxProntuarioTabela]).trim();
-        let valorFinal = (valoresAtuaisAnalise[i - 1] && valoresAtuaisAnalise[i - 1][0]) ? valoresAtuaisAnalise[i-1][0] : ""; // Valor atual por padrão
-
-        if (prontuarioTabela && prontuarioTabela in dadosParaTabela) {
-          const ultimoStatus = dadosParaTabela[prontuarioTabela];
-          if (valorFinal !== ultimoStatus) { // Atualiza apenas se mudou
-            valorFinal = ultimoStatus;
-            updatesTabela++;
-          }
-        }
-        novosValoresAnalise.push([valorFinal]); // Adiciona o valor (atual ou novo)
-      }
-
-      if (updatesTabela > 0) {
-        rangeAnalise.setValues(novosValoresAnalise);
-        Logger.log(updatesTabela + " linhas atualizadas na coluna '" + CONFIG.headers.analiseClassificacao + "' da aba 'Tabela'.");
-      } else {
-        Logger.log("Nenhuma atualização necessária na coluna '" + CONFIG.headers.analiseClassificacao + "' da aba 'Tabela'.");
-      }
-    }
-
-    // --- Finalização ---
-    let mensagemFinal = `${linhasCalculadas} taxa(s) mg/kg foram calculadas/atualizadas na aba '${CONFIG.sheets.prescricao}'.\n`;
-    mensagemFinal += `${updatesTabela} linha(s) tiveram a coluna '${CONFIG.headers.analiseClassificacao}' atualizada na aba '${CONFIG.sheets.tabelaResumo}' com o último status de dose.`;
-    if (errosCalculo.length > 0) {
-      mensagemFinal += '\n\nAtenção: Ocorreram ' + errosCalculo.length + ' erro(s) durante o cálculo de taxas (verificar logs para detalhes):\n' + errosCalculo.slice(0, 5).join('\n');
-      if (errosCalculo.length > 5) mensagemFinal += '\n... e mais ' + (errosCalculo.length - 5) + ' erros.';
-      Logger.log("Erros encontrados durante o processamento de taxas: " + JSON.stringify(errosCalculo));
-    }
-
-    // Tenta fechar o modal
-    try { ui.showModalDialog(HtmlService.createHtmlOutput("<script>google.script.host.close();</script>").setHeight(10).setWidth(10), "Fechando..."); Utilities.sleep(500); } catch (e) { }
-
-    ui.alert('Processamento Concluído!', mensagemFinal, ui.ButtonSet.OK);
-  } catch (err) {
-    Logger.log("Erro durante processarPlanilhaInteira: " + err + "\nStack: " + err.stack);
-    try { ui.showModalDialog(HtmlService.createHtmlOutput("<script>google.script.host.close();</script>").setHeight(10).setWidth(10), "Fechando..."); Utilities.sleep(500); } catch (e) { }
-    ui.alert('Erro no Processamento', 'Ocorreu um erro: ' + err.message + '. Verifique os logs (Extensões > Apps Script > Execuções).', ui.ButtonSet.OK);
-  } finally {
-    lock.releaseLock(); // Libera o bloqueio
-    Logger.log("Bloqueio de processamento liberado.");
-  }
-}
-
+// --- MÓDULO 3 & 4: PROCESSADOR EM LOTE ---
+// (REMOVIDO CONFORME FASE 2) 
 
 // --- MÓDULO 5: OTIMIZAÇÃO DE PESO (CACHE) ---
-// (Este módulo permanece inalterado)
+// (MOVIDO PARA Utils.gs CONFORME FASE 2) 
 
-/**
- * Cria um mapa de {prontuário: [[data, peso], [data, peso], ...]}
- * onde a lista de pesos de cada paciente é ORDENADA PELA DATA (mais recente primeiro).
- * Armazena este mapa no CacheService.
- * @param {boolean} force - Se true, força a reconstrução do cache.
- */
-function buildAndCacheWeightMap(force = false) {
-  const cache = CacheService.getScriptCache();
-  const CACHE_KEY = 'WEIGHT_MAP';
-  if (!force) {
-    const cachedMap = cache.get(CACHE_KEY);
-    if (cachedMap) {
-      Logger.log("Usando mapa de pesos do cache.");
-      return JSON.parse(cachedMap);
-    }
-  }
-
-  Logger.log("Construindo novo mapa de pesos...");
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const pesoSheet = ss.getSheetByName(CONFIG.sheets.peso);
-  if (!pesoSheet) {
-    Logger.log("Aba 'Registro de Peso' não encontrada. Não é possível construir o mapa.");
-    return {}; // Retorna objeto vazio
-  }
-
-  const pesoData = pesoSheet.getDataRange().getValues();
-  const cabecalhosPeso = pesoData.shift(); // Remove cabeçalho
-  const idxProntuarioPeso = cabecalhosPeso.indexOf(CONFIG.headers.prontuario);
-  const idxDataPeso = cabecalhosPeso.indexOf(CONFIG.headers.dataPeso);
-  const idxPeso = cabecalhosPeso.indexOf(CONFIG.headers.peso);
-  if (idxProntuarioPeso === -1 || idxDataPeso === -1 || idxPeso === -1) {
-    Logger.log("Aviso em buildAndCacheWeightMap: Cabeçalhos faltando na aba 'Registro de Peso'.");
-    return {}; // Retorna objeto vazio
-  }
-
-  const weightMap = {};
-  for (const linha of pesoData) {
-    const prontuario = String(linha[idxProntuarioPeso]).trim();
-    if (!prontuario) continue;
-
-    const peso = linha[idxPeso];
-    if (typeof peso !== 'number' || isNaN(peso) || peso <= 0) continue;
-
-    let data;
-    try {
-      const dataValor = linha[idxDataPeso];
-      if (!dataValor) continue;
-      data = new Date(dataValor);
-      if (isNaN(data.getTime())) {
-        if (typeof dataValor === 'string' && dataValor.includes('/')) {
-            const parts = dataValor.split('/');
-            if (parts.length === 3) data = new Date(parts[2], parseInt(parts[1]) - 1, parts[0]); // Assume DD/MM/YYYY
-        }
-      }
-      if (isNaN(data.getTime())) continue; // Pula se ainda for inválida
-    } catch (e) {
-      continue; // Pula linha com data inválida
-    }
-
-    if (!weightMap[prontuario]) {
-      weightMap[prontuario] = [];
-    }
-    // Armazena como [timestamp, peso] para ordenação numérica fácil
-    weightMap[prontuario].push([data.getTime(), peso]);
-  }
-
-  // Ordena a lista de pesos de cada paciente (mais recente primeiro)
-  for (const prontuario in weightMap) {
-    weightMap[prontuario].sort((a, b) => b[0] - a[0]); // Ordena por timestamp, descendente
-  }
-
-  // Armazena no cache por 1 hora (3600 segundos)
-  cache.put(CACHE_KEY, JSON.stringify(weightMap), 3600);
-  Logger.log("Mapa de pesos construído e salvo no cache.");
-  return weightMap;
-}
-
-/**
- * FUNÇÃO AJUDANTE OTIMIZADA
- * Encontra o peso mais recente para um paciente usando o mapa em cache.
- * @param {string} prontuario O prontuário do paciente.
- * @param {Date} dataAlvo A data da prescrição/administração.
- * @return {number|null} O peso mais recente ou null se não encontrado/erro.
- */
-function findLatestWeightOptimized(prontuario, dataAlvo) {
-  const weightMap = buildAndCacheWeightMap(false); // Usa o cache se disponível
-  prontuario = String(prontuario).trim();
-  if (!weightMap[prontuario]) {
-    // Logger.log(`findLatestWeightOptimized: Nenhum peso registrado para ${prontuario}.`);
-    return null;
-  }
-
-  const pesosDoPaciente = weightMap[prontuario]; // Já está ordenado [data_desc, peso]
-  const dataAlvoTime = dataAlvo.getTime();
-  // Encontra o primeiro peso cuja data é MENOR OU IGUAL à data alvo
-  for (const [dataTime, peso] of pesosDoPaciente) {
-    if (dataTime <= dataAlvoTime) {
-      // Logger.log(`findLatestWeightOptimized: Peso encontrado para ${prontuario} em ${new Date(dataTime).toLocaleDateString()}: ${peso}`);
-      return peso;
-    }
-  }
-
-  // Logger.log(`findLatestWeightOptimized: Nenhum peso encontrado para ${prontuario} EM OU ANTES de ${dataAlvo.toLocaleDateString()}.`);
-  return null;
-}
-
-/**
- * =============================================================
- * MÓDULO 6 (v2): CONSTRUTOR DE RELATÓRIO MODULAR
- * =============================================================
- */
-
-/**
- * Abre o novo pop-up "Construtor de Relatórios".
- */
+// --- MÓDULO 6: CONSTRUTOR DE RELATÓRIO MODULAR ---
+// (Permanece igual)
 function abrirModalRelatorioBuilder() {
-  const html = HtmlService.createHtmlOutputFromFile('RelatorioBuilder')
+  // CORREÇÃO: Usar .createTemplateFromFile().evaluate()
+  const html = HtmlService.createTemplateFromFile('RelatorioBuilder')
+    .evaluate() // <-- CORREÇÃO
     .setWidth(550)
     .setHeight(450);
   SpreadsheetApp.getUi().showModalDialog(html, 'Construtor de Relatório');
 }
 
-/**
- * =============================================================
- * MÓDULO 6 (v3): CONSTRUTOR DE RELATÓRIO MODULAR (Correção de Linhas Vazias)
- * =============================================================
- */
-
-/**
- * Abre o novo pop-up "Construtor de Relatórios".
- * (Esta função permanece igual)
- */
-function abrirModalRelatorioBuilder() {
-  const html = HtmlService.createHtmlOutputFromFile('RelatorioBuilder')
-    .setWidth(550)
-    .setHeight(450);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Construtor de Relatório');
-}
-
-/**
- * Função principal do "Construtor de Relatórios".
- * === ATUALIZADA (v3) para ignorar linhas vazias ===
- * @param {string[]} modulosSelecionados - Array de strings, ex: ["contagemSexo", "custoPorSexo"]
- */
 function gerarRelatorioModular(modulosSelecionados) {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // --- 1. Preparar a Aba de Relatório ---
-  const nomeRelatorio = "Relatório Modular";
+const nomeRelatorio = "Relatório Modular";
   let reportSheet = ss.getSheetByName(nomeRelatorio);
   if (reportSheet) {
     reportSheet.clear();
   } else {
     reportSheet = ss.insertSheet(nomeRelatorio);
-  }
+}
   ss.setActiveSheet(reportSheet);
   
   reportSheet.getRange("B1").setValue("Relatório Modular Gerado em: " + new Date().toLocaleString())
       .setFontWeight("bold").setFontSize(14);
-  
-  // --- 2. Ler os Dados da 'Tabela' (Uma única vez) ---
-  const tabelaSheet = ss.getSheetByName(CONFIG.sheets.tabelaResumo);
-  if (!tabelaSheet) {
+const tabelaSheet = ss.getSheetByName(CONFIG.sheets.tabelaResumo);
+if (!tabelaSheet) {
     throw new Error("Aba '" + CONFIG.sheets.tabelaResumo + "' não encontrada.");
-  }
+}
   const tabelaRange = tabelaSheet.getDataRange();
   const tabelaData = tabelaRange.getValues();
-  const tabelaHeaders = tabelaData.shift(); // Pega cabeçalhos
+  const tabelaHeaders = tabelaData.shift();
 
-  // --- CORREÇÃO: Pegar o índice do Prontuário AQUI ---
-  const idxProntuario = tabelaHeaders.indexOf(CONFIG.headers.prontuario);
+const idxProntuario = tabelaHeaders.indexOf(CONFIG.headers.prontuario);
   if (idxProntuario === -1) {
     throw new Error("Coluna '" + CONFIG.headers.prontuario + "' não encontrada na aba 'Tabela'. O relatório não pode continuar.");
-  }
-  // --- FIM DA CORREÇÃO ---
+}
 
-  let currentRow = 4; // Linha inicial para os gráficos
-  const chartWidth = 550;
+  let currentRow = 4;
+const chartWidth = 550;
   const chartHeight = 300;
-  let erros = []; // Armazena avisos de módulos pulados
+  let erros = [];
 
-  // --- 3. Roteador de Módulos ---
-  
   // --- MÓDULO: Contagem por Sexo ---
   if (modulosSelecionados.includes("contagemSexo")) {
     Logger.log("Tentando gerar 'contagemSexo'...");
-    const idxSexo = tabelaHeaders.indexOf(CONFIG.headers.sexo);
+const idxSexo = tabelaHeaders.indexOf(CONFIG.headers.sexo);
     
     if (idxSexo === -1) {
       erros.push("Módulo 'Contagem por Sexo' pulado: Coluna '" + CONFIG.headers.sexo + "' não encontrada.");
-    } else {
+} else {
       const contagem = {};
-      tabelaData.forEach(row => {
-        // --- CORREÇÃO AQUI ---
+tabelaData.forEach(row => {
         const prontuario = row[idxProntuario];
-        if (!prontuario) return; // Pula linha vazia
-        // --- FIM DA CORREÇÃO ---
+        if (!prontuario) return;
         
         const sexo = row[idxSexo] || "N/D";
         contagem[sexo] = (contagem[sexo] || 0) + 1;
       });
-      
-      const dadosGrafico = [["Sexo", "Contagem"]];
+const dadosGrafico = [["Sexo", "Contagem"]];
       Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
 
       if (dadosGrafico.length > 1) {
         currentRow = gerarGrafico_(reportSheet, "Distribuição por Sexo", Charts.ChartType.PIE, dadosGrafico, currentRow, chartWidth, chartHeight);
-      }
+}
     }
   }
   
   // --- MÓDULO: Contagem por Prematuridade ---
   if (modulosSelecionados.includes("contagemPrematuridade")) {
      Logger.log("Tentando gerar 'contagemPrematuridade'...");
-     const idxGestacao = tabelaHeaders.indexOf(CONFIG.headers.gestacao); 
+const idxGestacao = tabelaHeaders.indexOf(CONFIG.headers.gestacao); 
      
      if (idxGestacao === -1) {
        erros.push("Módulo 'Contagem por Prematuridade' pulado: Coluna '" + CONFIG.headers.gestacao + "' não encontrada.");
-     } else {
+} else {
        const contagem = {};
-       tabelaData.forEach(row => {
-         // --- CORREÇÃO AQUI ---
+tabelaData.forEach(row => {
          const prontuario = row[idxProntuario];
-         if (!prontuario) return; // Pula linha vazia
-         // --- FIM DA CORREÇÃO ---
+         if (!prontuario) return;
          
          const gestacaoStr = String(row[idxGestacao] || "N/D").toLowerCase();
          let classificacao = "Padrão/Outro";
-         if (gestacaoStr.includes("prematuro")) classificacao = "Prematuro";
+         
+if (gestacaoStr.includes("prematuro")) classificacao = "Prematuro";
          else if (gestacaoStr.includes("termo")) classificacao = "A Termo";
          
          contagem[classificacao] = (contagem[classificacao] || 0) + 1;
        });
-       
-       const dadosGrafico = [["Classificação", "Contagem"]];
+const dadosGrafico = [["Classificação", "Contagem"]];
        Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
        
        if (dadosGrafico.length > 1) {
          currentRow = gerarGrafico_(reportSheet, "Distribuição por Prematuridade", Charts.ChartType.PIE, dadosGrafico, currentRow, chartWidth, chartHeight);
-       }
+}
      }
   }
 
   // --- MÓDULO: Custo por Sexo ---
   if (modulosSelecionados.includes("custoPorSexo")) {
      Logger.log("Tentando gerar 'custoPorSexo'...");
-     const idxCusto = tabelaHeaders.indexOf(CONFIG.headers.custoTotal);
+const idxCusto = tabelaHeaders.indexOf(CONFIG.headers.custoTotal);
      const idxSexo = tabelaHeaders.indexOf(CONFIG.headers.sexo);
      
      if (idxCusto === -1 || idxSexo === -1) {
        erros.push("Módulo 'Custo por Sexo' pulado: Coluna '" + CONFIG.headers.custoTotal + "' ou '" + CONFIG.headers.sexo + "' não encontrada.");
-     } else {
-       const agregador = {}; 
-       tabelaData.forEach(row => {
-          // --- CORREÇÃO AQUI ---
+} else {
+       const agregador = {};
+tabelaData.forEach(row => {
           const prontuario = row[idxProntuario];
-          if (!prontuario) return; // Pula linha vazia
-          // --- FIM DA CORREÇÃO ---
+          if (!prontuario) return;
 
           const sexo = row[idxSexo] || "N/D";
           const custo = parseFloat(String(row[idxCusto]).replace("R$", "").replace(/\./g, "").replace(",", "."));
-          if (isNaN(custo)) return;
+         
+ if (isNaN(custo)) return;
           
           if (!agregador[sexo]) agregador[sexo] = { soma: 0, n: 0 };
           agregador[sexo].soma += custo;
           agregador[sexo].n++;
        });
-       
-       const dadosGrafico = [["Sexo", "Custo Médio (R$)"]];
+const dadosGrafico = [["Sexo", "Custo Médio (R$)"]];
        Object.keys(agregador).forEach(sexo => {
           const media = agregador[sexo].soma / agregador[sexo].n;
           dadosGrafico.push([sexo, media]);
        });
-       
-       if (dadosGrafico.length > 1) {
+if (dadosGrafico.length > 1) {
          currentRow = gerarGrafico_(reportSheet, "Custo Médio por Sexo", Charts.ChartType.COLUMN, dadosGrafico, currentRow, chartWidth, chartHeight);
-       }
+}
      }
   }
   
-  // (Você pode adicionar mais módulos, como "duracaoPorPrematuridade", seguindo o mesmo padrão)
-
-  // --- 4. Finalização ---
+  // --- Finalização ---
   let msgFinal = `Relatório modular gerado com ${modulosSelecionados.length} módulo(s) solicitado(s).`;
-  if (erros.length > 0) {
+if (erros.length > 0) {
     msgFinal += "\n\nAvisos:\n" + erros.join('\n');
-    Logger.log("Erros/Avisos do relatório modular: " + erros.join(', '));
+Logger.log("Erros/Avisos do relatório modular: " + erros.join(', '));
   }
   
   ui.alert("Sucesso!", msgFinal, ui.ButtonSet.OK);
   return "Sucesso";
 }
 
+// (A função 'gerarGrafico_' foi movida para Utils.gs) 
 
-/**
- * HELPER: Função genérica para criar e inserir um gráfico na aba.
- * (Esta função permanece igual)
- */
-function gerarGrafico_(sheet, titulo, tipo, dados, linha, largura, altura) {
-  try {
-    // Insere Título do Gráfico
-    sheet.getRange(linha, 2).setValue(titulo).setFontWeight("bold").setFontSize(12);
-    linha++;
-    
-    // Insere Tabela de Dados (útil para referência)
-    const dataRange = sheet.getRange(linha, 2, dados.length, dados[0].length);
-    dataRange.setValues(dados);
-
-    // Constrói o Gráfico
-    const chartBuilder = sheet.newChart()
-      .setChartType(tipo)
-      .addRange(dataRange)
-      .setOption('title', titulo)
-      .setOption('width', largura)
-      .setOption('height', altura)
-      .setPosition(linha, 4, 0, 0); // Posição: linha atual, coluna D (4)
-
-    if (tipo === Charts.ChartType.PIE) {
-      chartBuilder.setOption('pieHole', 0.4);
-    }
-    
-    sheet.insertChart(chartBuilder.build());
-    
-    // Calcula nova linha
-    const approxChartRows = Math.ceil(altura / 21) + 1; // Altura da linha padrão é ~21px
-    return linha + approxChartRows + 2; // Retorna a próxima linha livre
-
-  } catch (e) {
-    Logger.log("Erro ao gerar gráfico '" + titulo + "': " + e.message);
-    sheet.getRange(linha, 2).setValue("Erro ao gerar gráfico: " + e.message);
-    return linha + 3; // Pula algumas linhas
-  }
-}
-
-/**
- * =============================================================
- * FUNÇÃO DE TESTE (Pode apagar depois)
- * Usada APENAS para forçar o pedido de permissão para 'openById'.
- * =============================================================
- */
+// --- FUNÇÃO DE TESTE ---
+// (Permanece igual)
 function testarPermissaoBancoMestre() {
   try {
     Logger.log("Tentando conectar ao Banco de Dados Mestre...");
-    // (MASTER_DB_SHEET_ID é a const global que você moveu para cá)
-    const db = SpreadsheetApp.openById(MASTER_DB_SHEET_ID);
-    Logger.log("Conectado com sucesso: " + db.getName());
+const db = SpreadsheetApp.openById(MASTER_DB_SHEET_ID);
+Logger.log("Conectado com sucesso: " + db.getName());
     SpreadsheetApp.getUi().alert("Sucesso!", "Permissão concedida para acessar o Banco de Dados Mestre.", SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {
+} catch (e) {
     Logger.log("Erro ao testar permissão: " + e.message);
     SpreadsheetApp.getUi().alert("Erro no Teste", e.message, SpreadsheetApp.getUi().ButtonSet.OK);
   }
