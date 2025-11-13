@@ -2,57 +2,46 @@
 <html>
 <head>
   <base target="_top">
+  
+  <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent(); ?>
+  
   <style>
-    :root {
-      --cor-primaria: #005a9c;
-      --cor-primaria-hover: #004a80;
-      --cor-verde-escuro-titulo: #00573D;
-      --cor-fundo-app: #f4f7f6;
-      --cor-fundo-card: #ffffff;
-      --cor-borda: #e0e0e0;
-      --cor-texto-titulo: #1f1f1f;
-      --cor-texto-corpo: #444;
-      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
-      --border-radius: 8px;
+    body {
+      padding: 32px;
     }
-    body, html {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background-color: var(--cor-fundo-app);
-      color: var(--cor-texto-corpo);
-      margin: 0; padding: 0;
-    }
-    .container { padding: 32px; }
-    .header { padding-bottom: 20px; border-bottom: 1px solid var(--cor-borda); margin-bottom: 24px; }
+    
     h3 {
-      font-size: 1.9em; font-weight: 700;
-      color: var(--cor-verde-escuro-titulo);
-      margin: 0 0 4px 0; text-align: center;
+      /* Cor verde específica para o Setup */
+      color: #00573D;
     }
-    .header p { font-size: 1.1em; margin-top: 0; text-align: center; }
+    
+    p {
+      font-size: 1.1em;
+      text-align: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--cor-borda);
+    }
+    
     .block {
-      background-color: var(--cor-fundo-card);
-      padding: 24px;
-      border-radius: var(--border-radius);
-      box-shadow: var(--sombra-card);
       margin-bottom: 24px;
     }
+    
     .label {
-      font-size: 1.1em; font-weight: 600;
+      font-size: 1.1em;
+      font-weight: 600;
       color: var(--cor-texto-titulo);
-      margin-bottom: 12px; display: block;
+      margin-bottom: 12px;
+      display: block;
     }
-    select, input[type="text"], input[type="number"] {
-      width: 100%; padding: 12px; font-size: 1em;
-      border: 1px solid var(--cor-borda);
-      border-radius: 6px; background-color: #fff;
-      box-sizing: border-box; 
-    }
+
+    /* Layouts de Grelha */
     .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     
-    /* Estilo para as caixas de custo dinâmicas */
+    /* Inputs de Custo */
     .cost-input-group {
-      display: flex; align-items: center;
+      display: flex;
+      align-items: center;
       margin-bottom: 10px;
     }
     .cost-input-group label {
@@ -62,25 +51,13 @@
     }
     
     button.action {
-      font-size: 1.1em; font-weight: bold; color: #fff;
-      background-color: var(--cor-primaria);
-      border: none; padding: 14px 28px; border-radius: 6px;
-      cursor: pointer; float: right;
-      transition: all 0.2s ease;
+      float: right;
     }
-    button.action:hover {
-      background-color: var(--cor-primaria-hover);
-      box-shadow: 0 4px 10px rgba(0, 90, 156, 0.3);
-    }
-    #loading, #error { margin-top: 15px; display: none; }
-    #error { color: #dc3545; font-weight: bold; }
   </style>
 </head>
 <body>
   
-  <div class="container">
-    
-    <div class="header">
+  <div class="container" style="padding: 0;"> <div class="header">
       <h3>Wizard de Análise de Custo-Efetividade</h3>
       <p>Simule custos e compare a eficácia e segurança entre grupos.</p>
     </div>
@@ -89,19 +66,19 @@
       <label class="label">Passo 1: Selecionar a Fonte de Dados</label>
       <div class="grid-3">
         <div>
-          <label for="select-aba">Aba de Prescrição:</label>
-          <select id="select-aba" onchange="carregarGrupos()">
+          <label for="select-aba" style="font-size:0.9em; font-weight:bold;">Aba de Prescrição:</label>
+          <select id="select-aba" onchange="carregarColunas()">
             <option value="" disabled selected>Carregando abas...</option>
           </select>
         </div>
         <div>
-          <label for="select-coluna">Coluna de Agrupamento:</label>
+          <label for="select-coluna" style="font-size:0.9em; font-weight:bold;">Coluna de Agrupamento:</label>
           <select id="select-coluna" onchange="carregarGrupos()">
             <option value="" disabled selected>Aguardando aba...</option>
           </select>
         </div>
         <div>
-          <label for="select-medicamento">Medicamento-Alvo:</label>
+          <label for="select-medicamento" style="font-size:0.9em; font-weight:bold;">Medicamento-Alvo:</label>
           <select id="select-medicamento">
             <option value="" disabled selected>Aguardando aba...</option>
           </select>
@@ -112,7 +89,7 @@
     <div class="block">
       <label class="label">Passo 2: Informar os Custos (Simulação)</label>
       <div id="cost-input-container">
-        <p style="text-align: left; border: none; padding: 0;"><i>Por favor, selecione uma aba e coluna de agrupamento primeiro.</i></p>
+        <p style="text-align: left; padding: 0;"><i>Por favor, selecione uma aba e coluna de agrupamento primeiro.</i></p>
       </div>
     </div>
     
@@ -120,7 +97,7 @@
       <div class="grid-2">
         <div>
           <label class="label">Passo 3: Definir "Sucesso" (Eficácia)</label>
-          <label for="select-exame">Onde Exame:</label>
+          <label for="select-exame" style="font-size:0.9em; font-weight:bold;">Onde Exame:</label>
           <select id="select-exame">
             <option value="">-- Nenhum --</option>
             <option value="Cálcio Total">Cálcio Total</option>
@@ -129,7 +106,7 @@
             <option value="Ureia">Ureia</option>
             <option value="Creatinina">Creatinina</option>
           </select>
-          <label for="select-analise" style="margin-top: 10px;">Tem Análise:</label>
+          <label for="select-analise" style="margin-top: 10px; font-size:0.9em; font-weight:bold;">Tem Análise:</label>
           <select id="select-analise">
             <option value="">-- Qualquer --</option>
             <option value="Normal">Normal</option>
@@ -139,7 +116,7 @@
         </div>
         <div>
           <label class="label">Passo 4: Definir "Risco" (Segurança)</label>
-          <label for="select-ram">Onde RAM é:</label>
+          <label for="select-ram" style="font-size:0.9em; font-weight:bold;">Onde RAM é:</label>
           <select id="select-ram">
             <option value="qualquer">Qualquer RAM</option>
             <option value="Grave/Séria">Apenas Grave/Séria</option>
@@ -158,33 +135,26 @@
   </div>
 
   <script>
-    // --- LÓGICA DO FORMULÁRIO (v1) ---
-    
-    // 1. Carrega as abas de Prescrição ao iniciar
     window.addEventListener('load', function() {
-      // Hardcode das abas de prescrição (mais rápido)
+      // (JS para carregar abas e medicamentos)
       const abas = ["Prescrição de Doses", "Prescricao_CE"]; 
       popularDropdownAba(abas);
-      
-      // Carrega os medicamentos da aba principal (para filtro)
       google.script.run
         .withSuccessHandler(popularDropdownMedicamentos)
         .withFailureHandler(mostrarErro)
-        .obterListaDeMedicamentosUnicos(); // Do Utils.gs
+        .obterListaDeMedicamentosUnicos(); 
     });
     
     function popularDropdownAba(abas) {
       const select = document.getElementById('select-aba');
       select.innerHTML = '<option value="" disabled selected>-- Selecione uma aba --</option>';
-      // Adiciona as abas de prescrição
       abas.forEach(aba => {
         if (aba === "Prescricao_CE") {
-          select.innerHTML += `<option value="${aba}" selected>${aba}</option>`; // Deixa pré-selecionada
+          select.innerHTML += `<option value="${aba}" selected>${aba}</option>`; 
         } else {
           select.innerHTML += `<option value="${aba}">${aba}</option>`;
         }
       });
-      // Assim que as abas são carregadas, carrega as colunas da aba pré-selecionada
       carregarColunas();
     }
     
@@ -196,58 +166,50 @@
       });
     }
 
-    // 2. Carrega as colunas da aba selecionada
     function carregarColunas() {
       const nomeAba = document.getElementById('select-aba').value;
       if (!nomeAba) return;
-      
       google.script.run
         .withSuccessHandler(popularDropdownColunas)
         .withFailureHandler(mostrarErro)
-        .obterColunasDaAba(nomeAba); // Nova função de backend
+        .obterColunasDaAba(nomeAba); 
     }
 
     function popularDropdownColunas(colunas) {
       const select = document.getElementById('select-coluna');
       select.innerHTML = '<option value="" disabled selected>-- Selecione uma coluna --</option>';
       colunas.forEach(col => {
-        // Deixa "FABRICANTE" pré-selecionado
         if (col === "FABRICANTE") {
           select.innerHTML += `<option value="${col}" selected>${col}</option>`;
         } else {
           select.innerHTML += `<option value="${col}">${col}</option>`;
         }
       });
-      // Carrega os grupos (ex: Marcas) da coluna pré-selecionada
       carregarGrupos();
     }
     
-    // 3. Carrega os grupos de comparação (ex: "Marca A", "Marca B")
     function carregarGrupos() {
       const nomeAba = document.getElementById('select-aba').value;
       const nomeColuna = document.getElementById('select-coluna').value;
       if (!nomeAba || !nomeColuna) return;
       
       const container = document.getElementById('cost-input-container');
-      container.innerHTML = '<p style="text-align: left; border: none; padding: 0;"><i>Carregando grupos da coluna ' + nomeColuna + '...</i></p>';
+      container.innerHTML = '<p style="text-align: left; padding: 0;"><i>Carregando grupos da coluna ' + nomeColuna + '...</i></p>';
       
       google.script.run
         .withSuccessHandler(popularCaixasDeCusto)
         .withFailureHandler(mostrarErro)
-        .obterGruposDeComparacao(nomeAba, nomeColuna); // Nova função de backend
+        .obterGruposDeComparacao(nomeAba, nomeColuna); 
     }
     
-    // 4. Constrói as "caixas" de custo (Sua ideia)
     function popularCaixasDeCusto(grupos) {
       const container = document.getElementById('cost-input-container');
       container.innerHTML = '';
       if (grupos.length === 0) {
-        container.innerHTML = '<p style="text-align: left; border: none; padding: 0;"><i>Nenhum grupo encontrado.</i></p>';
+        container.innerHTML = '<p style="text-align: left; padding: 0;"><i>Nenhum grupo encontrado.</i></p>';
         return;
       }
-      
-      container.innerHTML += '<p style="text-align: left; border: none; padding: 0; font-size: 0.9em; margin-bottom: 10px;">Informe o custo simulado (por dia) para cada grupo:</p>';
-      
+      container.innerHTML += '<p stylei="font-size: 0.9em; margin-bottom: 10px; text-align: left; padding: 0;">Informe o custo simulado (por dia) para cada grupo:</p>';
       grupos.forEach(grupo => {
         container.innerHTML += `
           <div class="cost-input-group">
@@ -258,12 +220,10 @@
       });
     }
 
-    // 5. Inicia a Análise
     function iniciarAnalise() {
       document.getElementById('loading').style.display = 'block';
       document.getElementById('error').style.display = 'none';
 
-      // 1. Coleta Custos
       const custos = {};
       const inputsCusto = document.querySelectorAll('.custo-input');
       inputsCusto.forEach(input => {
@@ -278,7 +238,6 @@
         mostrarErro({ message: "Por favor, informe pelo menos um custo." }); return;
       }
       
-      // 2. Coleta Opções
       const opcoes = {
         abaPrescricao: document.getElementById('select-aba').value,
         colunaAgrupadora: document.getElementById('select-coluna').value,
@@ -296,7 +255,7 @@
       google.script.run
         .withSuccessHandler(analiseCompleta)
         .withFailureHandler(mostrarErro)
-        .gerarAnaliseCustoEfetividade(opcoes); // Envia para o novo "motor"
+        .gerarAnaliseCustoEfetividade(opcoes); 
     }
 
     function analiseCompleta(mensagem) {
@@ -306,6 +265,7 @@
 
     function mostrarErro(erro) {
       document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
       document.getElementById('error').textContent = 'Erro: ' + erro.message;
     }
   </script>
