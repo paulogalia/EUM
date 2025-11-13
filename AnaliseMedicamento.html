@@ -1,359 +1,482 @@
-<style>
-  :root {
-    --cor-primaria: #005a9c;
-    --cor-primaria-hover: #004a80;
-    --cor-seguranca: #d9534f; 
-    --cor-seguranca-hover: #c9302c;
-    --cor-fundo-app: #f4f7f6;
-    --cor-fundo-card: #ffffff;
-    --cor-borda: #e0e0e0;
-    --cor-texto-titulo: #1f1f1f;
-    --cor-texto-corpo: #444;
-    --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
-    --border-radius: 8px;
-  }
-  body, html {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    background-color: var(--cor-fundo-card); 
-    color: var(--cor-texto-corpo);
-    margin: 0;
-    padding: 0;
-    overflow-y: auto; /* Permite scroll */
-  }
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
   
-  /* --- Ecrã de Splash (AGORA COM SPINNER) --- */
-  #splash-screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    width: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
-    background-color: var(--cor-fundo-card);
-    z-index: 100;
-    transition: opacity 0.5s ease-out;
-  }
-  /* --- O "CIRCULOZINHO GIRANDO" --- */
-  .spinner {
-    width: 60px;
-    height: 60px;
-    border: 6px solid var(--cor-borda); /* Cinza claro */
-    border-top-color: var(--cor-primaria); /* Azul */
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  /* --- FIM DO SPINNER --- */
-
-  #splash-text {
-    font-size: 1.2em;
-    font-weight: 500;
-    color: var(--cor-texto-corpo);
-    margin-top: 25px;
-  }
-  .loading-dots::after {
-    content: '.';
-    animation: dots 1.4s steps(5, end) infinite;
-  }
-  @keyframes dots {
-    0%, 20% { content: "."; }
-    40% { content: ".."; }
-    60% { content: "..."; }
-    80%, 100% { content: ""; }
-  }
-
-  /* --- O resto do CSS permanece igual --- */
-  .container {
-    display: grid;
-    grid-template-columns: 1fr 1.2fr; 
-    grid-template-rows: auto 1fr auto;
-    gap: 24px;
-    padding: 32px;
-    background-color: var(--cor-fundo-app);
-    opacity: 0;
-    transition: opacity 0.5s ease-in;
-  }
-  .header {
-    grid-column: 1 / -1;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--cor-borda);
-  }
-  .footer {
-    grid-column: 1 / -1;
-    border-top: 1px solid var(--cor-borda);
-    padding-top: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    align-items: center;
-  }
-  .coluna-esquerda { grid-column: 1 / 2; }
-  .coluna-direita { grid-column: 2 / 3; }
+  <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent(); ?>
   
-  h3 {
-    font-size: 1.9em;
-    font-weight: 700;
-    color: var(--cor-primaria);
-    margin: 0 0 4px 0;
-    text-align: center;
-  }
-  .header p {
-    font-size: 1.1em;
-    margin-top: 0;
-    text-align: center;
-  }
-  .block {
-    background-color: var(--cor-fundo-card);
-    padding: 24px;
-    border-radius: var(--border-radius);
-    box-shadow: var(--sombra-card);
-    height: 100%;
-    box-sizing: border-box;
-    overflow-y: auto;
-  }
-  .label {
-    font-size: 1.1em;
-    font-weight: 600;
-    color: var(--cor-texto-titulo);
-    margin-bottom: 12px;
-    display: block;
-  }
-  select {
-    width: 100%;
-    padding: 12px;
-    font-size: 1em;
-    border: 1px solid var(--cor-borda);
-    border-radius: 6px;
-    background-color: #fff;
-  }
-  
-  button.action, button.action-ram {
-    font-size: 1.1em;
-    font-weight: bold;
-    color: #fff;
-    border: none;
-    padding: 14px 28px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    width: 100%;
-  }
-  button.action {
-    background-color: var(--cor-primaria);
-  }
-  button.action-ram {
-    background-color: var(--cor-seguranca);
-  }
-  button.action:hover {
-    background-color: var(--cor-primaria-hover);
-    box-shadow: 0 4px 10px rgba(0, 90, 156, 0.3);
-  }
-  button.action-ram:hover {
-    background-color: var(--cor-seguranca-hover);
-    box-shadow: 0 4px 10px rgba(217, 83, 79, 0.3);
-  }
-  
-  .tutorial-box {
-    background-color: #f8f9fa; 
-    line-height: 1.6;
-  }
-  .tutorial-box h4 {
-    font-size: 1.2em;
-    color: var(--cor-primaria);
-    margin: 10px 0 10px 0;
-    border-bottom: 1px solid var(--cor-borda);
-    padding-bottom: 5px;
-  }
-  .tutorial-box ul {
-    padding-left: 20px;
-  }
-  .tutorial-box li {
-    margin-bottom: 8px;
-  }
+  <style>
+    body {
+      background-color: var(--cor-fundo-app);
+      padding: 32px; 
+      overflow-y: auto;
+    }
+    
+    .container-centralizado {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 15px;
+    }
+    
+    .mapping-group { margin-bottom: 15px; }
+    .mapping-group label {
+        font-size: 0.9em;
+        font-weight: bold;
+        margin-bottom: 4px;
+        display: block;
+    }
+    .mapping-group select {
+        padding: 8px;
+        font-size: 0.9em;
+        background-color: #fff;
+    }
+    
+    .block p {
+      text-align: left;
+      border: none;
+      padding: 0;
+      font-size: 0.9em; 
+      margin-top: -10px; 
+      margin-bottom: 15px;
+    }
+    
+    .block + .block {
+      margin-top: 24px;
+    }
+    
+    .block .label {
+      border-bottom: 1px solid var(--cor-borda);
+      padding-bottom: 8px;
+      margin-top: 10px; 
+    }
+    .card > .block:first-child .label:first-child {
+      margin-top: 0;
+    }
+    
+    details {
+      background-color: var(--cor-fundo-app);
+      border: 1px dashed var(--cor-primaria);
+      border-radius: var(--border-radius);
+      padding: 10px 15px;
+      margin-bottom: 24px; 
+    }
+    summary {
+      font-weight: bold;
+      color: var(--cor-primaria);
+      cursor: pointer;
+    }
+    
+    .footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr; 
+      gap: 15px;
+      align-items: center;
+    }
+    
+    /* **** BOTÃO ATUALIZADO **** */
+    button.action-perfil { /* Antigo 'action-protocolo' */
+      font-size: 1.1em; font-weight: bold; color: #fff;
+      border: none; padding: 14px 28px; border-radius: 6px;
+      cursor: pointer; transition: all 0.2s ease;
+      width: 100%; box-sizing: border-box;
+      background-color: #00573D; /* Verde Escuro (era cinza) */
+    }
+    button.action-perfil:hover { background-color: #004a32; }
+    
+  </style>
+</head>
+<body>
 
-  #loading, #error { 
-    grid-column: 1 / -1; 
-    margin-top: 0; 
-    padding: 0;
-    display: none;
-  }
-  #error { color: #dc3545; font-weight: bold; }
-</style>
-
-<div id="splash-screen">
-  <div class="spinner"></div>
-  <div id="splash-text">Aguarde carregamento<span class="loading-dots"></span></div>
-</div>
-
-
-<div class="container" id="main-container" style="opacity: 0;">
-  <div class="header">
-    <h3>Análise de Tendência Interativa</h3>
-    <p>Passo 1: Selecione a coorte de pacientes para análise.</p>
+  <div id="splash-screen">
+    <div class="spinner"></div>
+    <div id="splash-text">A carregar dados de configuração...</div>
   </div>
-  
-  <div class="coluna-esquerda">
-    <div class="block">
-      <label class="label">Definir a População-Alvo</label>
+
+  <div class="container-centralizado" id="main-container" style="opacity: 0; transition: opacity 0.5s ease-in;">
+    
+    <div class="header">
+      <h3>Configurador de Análise</h3>
+      <p>Mapeie as suas fontes de dados para carregar o laboratório.</p>
+    </div>
+    
+    <div class="card">
       
-      <label for="select-medicamento" class="label" style="font-size: 1em; margin-bottom: 5px;">Medicamento (Intervenção):</label>
-      <select id="select-medicamento" class="form-control">
-        <option value="" disabled selected>Carregando...</option>
-      </select>
+      <details>
+        <summary>O que faz esta ferramenta?</summary>
+        <div style="line-height: 1.6; margin-top: 10px; padding: 10px 5px;">
+          <p style="font-size: 0.9em;">Este é o motor de análise central.</p>
+          <p style="font-size: 0.9em;"><b>Passo 1: Fatos (Eventos)</b><br>Mapeie a sua aba de dados brutos (ex: 'Prescrição de Doses').</p>
+          <p style="font-size: 0.9em;"><b>Passo 2: Dimensões (Pacientes)</b><br>Mapeie a sua aba de demografia (ex: 'MENU PRINCIPAL').</p>
+          <p style="font-size: 0.9em;">Após mapear, clique num dos botões no rodapé para iniciar a análise.</p>
+        </div>
+      </details>
       
-      <label for="filtro-sexo" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Sexo:</label>
-      <select id="filtro-sexo" class="form-control">
-        <option value="todos">Todos</option>
-        <option value="M">Apenas Masculino</option>
-        <option value="F">Apenas Feminino</option>
-      </select>
+      <div class="block">
+        <label class="label">1. Mapeamento de Fatos (Eventos)</label>
+        
+        <div class="grid-2">
+          <div class="mapping-group">
+            <label for="map-aba-fatos">Aba de Fatos (Eventos):</label>
+            <select id="map-aba-fatos" onchange="popularDropdownsMapeamento()">
+            </select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-fatos-intervencao">Coluna da Intervenção (ex: Medicamento):</label>
+            <select id="map-fatos-intervencao" class="map-fatos" onchange="popularDropdownValores()"></select>
+          </div>
+        </div>
+        
+        <div class="mapping-group">
+            <label for="map-intervencao-valor">Valor da Intervenção (Dia 0):</label>
+            <select id="map-intervencao-valor">
+              <option value="">-- Aguardando Coluna --</option>
+            </select>
+        </div>
+        
+        <hr style="border:0; border-top: 1px solid #eee; margin: 15px 0;">
+
+        <div class="grid-3">
+          <div class="mapping-group">
+            <label for="map-fatos-prontuario">Prontuário (Fatos):</label>
+            <select id="map-fatos-prontuario" class="map-fatos"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-fatos-data-inicio">Data Início (Evento):</label>
+            <select id="map-fatos-data-inicio" class="map-fatos"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-fatos-codigo-med">Código do Medicamento:</label>
+            <select id="map-fatos-codigo-med" class="map-fatos"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-fatos-dose">Valor da Dose (ex: 5):</label>
+            <select id="map-fatos-dose" class="map-fatos"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-fatos-unidade">Unidade da Dose (ex: "ML"):</label>
+            <select id="map-fatos-unidade" class="map-fatos"></select>
+          </div>
+        </div>
+      </div>
       
-      <label for="filtro-prematuridade" class="label" style="font-size: 1em; margin-top: 15px; margin-bottom: 5px;">Prematuridade:</label>
-      <select id="filtro-prematuridade" class="form-control">
-        <option value="todos">Todos</option>
-        <option value="prematuro">Apenas Prematuros</option>
-        <option value="padrao">Apenas A Termo/Padrão</option>
-      </select>
+      <div class="block">
+        <label class="label">2. Mapeamento de Dimensões (Pacientes)</label>
+        
+        <div class="grid-3">
+          <div class="mapping-group">
+            <label for="map-aba-dimensoes">Aba de Dimensões:</label>
+            <select id="map-aba-dimensoes" onchange="popularDropdownsMapeamento()">
+            </select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-dim-prontuario">Prontuário (Dimensões):</label>
+            <select id="map-dim-prontuario" class="map-dim"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-dim-data-nasc">Data de Nascimento:</label>
+            <select id="map-dim-data-nasc" class="map-dim"></select>
+          </div>
+        </div>
+        
+        <hr style="border:0; border-top: 1px solid #eee; margin: 15px 0;">
+        <label class="label" style="font-size: 1em;">Mapeamento Opcional (Para Filtros e Divisões)</label>
+        
+        <div class="grid-3">
+          <div class="mapping-group">
+            <label for="map-dim-sexo">Coluna 'Sexo':</label>
+            <select id="map-dim-sexo" class="map-dim"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-dim-gestacao">Coluna 'Idade Gestacional':</label>
+            <select id="map-dim-gestacao" class="map-dim"></select>
+          </div>
+          <div class="mapping-group">
+            <label for="map-dim-divisao">Coluna de Divisão (ex: Marca):</label>
+            <select id="map-dim-divisao" class="map-dim"></select>
+          </div>
+        </div>
+      </div>
+      
+    </div> <div class="footer">
+      <button class="action" onclick="iniciarAnalise('eficacia')">
+        🧪 Lab de Eficácia (Temporal)
+      </button>
+      <button class="action-ram" onclick="iniciarAnalise('seguranca')">
+        🛡️ Lab de Segurança (Incidência)
+      </button>
+      
+      <button class="action-perfil" onclick="iniciarAnalise('perfil')">
+        📈 Lab de Perfil de Uso (X por Y)
+      </button>
+      
+      <div id="loading" style="grid-column: 1 / -1;"><p>A carregar...</p></div>
+      <div id="error" style="grid-column: 1 / -1;"></div>
     </div>
   </div>
 
-  <div class="coluna-direita">
-    <div class="block tutorial-box">
-      <h4>O que é isto?</h4>
-      <p>Esta é a etapa de configuração da sua análise. Por favor, selecione a <strong>Intervenção</strong> (Medicamento) e a <strong>População-Alvo</strong> (Sexo, Prematuridade) que deseja estudar.</p>
-      
-      <h4>Próximos Passos</h4>
-      <p>Após selecionar a coorte, escolha qual laboratório deseja abrir:</p>
-      <ul>
-        <li><strong>Lab de Eficácia:</strong> Focado em Exames e Doses (Gráficos de Linha, Médias, Tendências).</li>
-        <li><strong>Lab de Segurança:</strong> Focado em RAMs (Gráficos de Risco, Heatmaps, Incidência).</li>
-      </ul>
-      <p>Ambos os laboratórios usarão esta coorte como base para a análise temporal (Dia 0).</p>
-    </div>
-  </div>
-
-  <div class="footer">
-    <button class="action" onclick="iniciarAnalise('eficacia')">
-      🧪 Carregar Laboratório de Eficácia (Exames)
-    </button>
-    <button class="action-ram" onclick="iniciarAnalise('seguranca')">
-      🛡️ Carregar Laboratório de Segurança (RAMs)
-    </button>
-    
-    <div id="loading"><p>A carregar...</p></div>
-    <div id="error"></div>
-  </div>
-</div>
-
-<script>
-  window.addEventListener('load', function() {
-    google.script.run
-      .withSuccessHandler(onDataLoaded)     
-      .withFailureHandler(onDataError)      
-      .obterListaDeMedicamentosUnicos();
-  });
-  
-  function onDataLoaded(medicamentos) {
-    popularDropdown(medicamentos);
-    mostrarConteudoPrincipal(null);
-  }
-  
-  function onDataError(erro) {
-    mostrarConteudoPrincipal(erro);
-  }
-
-  function mostrarConteudoPrincipal(erro) {
-    const splash = document.getElementById('splash-screen');
-    const main = document.getElementById('main-container');
-
-    splash.style.opacity = '0';
-    
-    setTimeout(function() {
-      splash.style.display = 'none'; 
-
-      main.style.opacity = '1';
-      document.body.style.backgroundColor = 'var(--cor-fundo-app)'; 
-
-      if (erro) {
-        mostrarErro(erro);
-      }
-    }, 500); 
-  }
-
-  function popularDropdown(medicamentos) {
-    const select = document.getElementById('select-medicamento');
-    select.innerHTML = '';
-    if (medicamentos.length === 0) {
-      select.innerHTML = '<option disabled selected>Nenhum medicamento encontrado</option>';
-      return;
-    }
-    select.innerHTML = '<option value="" disabled selected>-- Selecione um medicamento --</option>';
-    medicamentos.forEach(function(med) {
-      const option = document.createElement('option');
-      option.value = med;
-      option.textContent = med;
-      select.appendChild(option);
-    });
-  }
-
-  function iniciarAnalise(tipoLaboratorio) {
-    document.getElementById('main-container').style.opacity = '0';
-    document.body.style.backgroundColor = 'var(--cor-fundo-card)'; 
-    
-    const splash = document.getElementById('splash-screen');
-    const splashText = document.getElementById('splash-text');
-    
-    if (tipoLaboratorio === 'eficacia') {
-      splashText.innerHTML = 'A preparar Laboratório de Eficácia<span class="loading-dots"></span>';
-    } else {
-      splashText.innerHTML = 'A preparar Laboratório de Segurança<span class="loading-dots"></span>';
-    }
-    
-    splash.style.display = 'flex';
-    splash.style.opacity = '1';
-
-    const medSelecionado = document.getElementById('select-medicamento').value;
-    
-    if (!medSelecionado) {
-      mostrarErro({ message: "Por favor, selecione um medicamento." });
-      return;
-    }
-    
-    const opcoes = {
-      medicamento: medSelecionado,
-      filtrosPop: {
-        sexo: document.getElementById('filtro-sexo').value,
-        prematuridade: document.getElementById('filtro-prematuridade').value
-      }
+  <script>
+    // (O JavaScript é o mesmo da Fase B anterior, com a chamada 'perfil' adicionada)
+    let globalColunas = {}; 
+    let globalAbas = [];
+    const abasSugeridas = {
+      fatos: "Prescrição de Doses",
+      dimensoes: "MENU PRINCIPAL"
+    };
+    const nomesPadrao = {
+      fatosProntuario: "PRONTUÁRIO",
+      fatosDataInicio: "DATA_INICIO",
+      fatosIntervencao: "MEDICAMENTO", 
+      fatosCodigoMed: "CODIGO_MED",
+      fatosDose: "DOSE_PRESCRITA",
+      fatosUnidade: "UN_PRESCRITA",
+      dimProntuario: "PRONTUÁRIO",
+      dimDataNasc: "DATA_NASCIMENTO",
+      dimSexo: "SEXO",
+      dimGestacao: "IDADE GESTACIONAL",
+      dimDivisao: "" 
     };
 
-    if (tipoLaboratorio === 'eficacia') {
+    window.addEventListener('load', function() {
       google.script.run
-        .withSuccessHandler(analiseCompleta)
-        .withFailureHandler(mostrarErro)
-        .abrirModalGraficoInterativo(opcoes); 
-    } else if (tipoLaboratorio === 'seguranca') {
-      google.script.run
-        .withSuccessHandler(analiseCompleta)
-        .withFailureHandler(mostrarErro)
-        .abrirModalLaboratorioRAM(opcoes); 
+        .withSuccessHandler(onSetupDataLoaded)     
+        .withFailureHandler(onDataError)      
+        .obterDadosParaSetupAnalise(); // (ANALISE.GS)
+    });
+    
+    function onSetupDataLoaded(dados) {
+      if (dados.erro) {
+        mostrarConteudoPrincipal({ message: dados.erro });
+        return;
+      }
+      
+      const colunasRecebidas = dados.colunas || [];
+      globalAbas = dados.abas || [];
+      
+      globalColunas = {};
+      colunasRecebidas.forEach(col => {
+        if (!globalColunas[col.nomeAba]) {
+          globalColunas[col.nomeAba] = [];
+        }
+        globalColunas[col.nomeAba].push(col.nomeColuna);
+      });
+      
+      const selAbaFatos = document.getElementById('map-aba-fatos');
+      const selAbaDimensoes = document.getElementById('map-aba-dimensoes');
+      
+      globalAbas.forEach(aba => {
+        selAbaFatos.innerHTML += `<option value="${aba}">${aba}</option>`;
+        selAbaDimensoes.innerHTML += `<option value="${aba}">${aba}</option>`;
+      });
+      
+      if (globalAbas.includes(abasSugeridas.fatos)) {
+        selAbaFatos.value = abasSugeridas.fatos;
+      }
+      if (globalAbas.includes(abasSugeridas.dimensoes)) {
+        selAbaDimensoes.value = abasSugeridas.dimensoes;
+      }
+      
+      popularDropdownsMapeamento();
+      mostrarConteudoPrincipal(null);
     }
-  }
 
-  function analiseCompleta(mensagem) {
-    google.script.host.close();
-  }
+    function popularDropdownsMapeamento() {
+      const abaFatosSel = document.getElementById('map-aba-fatos').value;
+      const abaDimSel = document.getElementById('map-aba-dimensoes').value;
+      const colunasFatos = globalColunas[abaFatosSel] || [];
+      const colunasDimensoes = globalColunas[abaDimSel] || [];
+      
+      populateSelect('map-fatos-prontuario', colunasFatos, nomesPadrao.fatosProntuario);
+      populateSelect('map-fatos-data-inicio', colunasFatos, nomesPadrao.fatosDataInicio, "DTHR_INICIO");
+      populateSelect('map-fatos-intervencao', colunasFatos, nomesPadrao.fatosIntervencao); 
+      populateSelect('map-fatos-codigo-med', colunasFatos, nomesPadrao.fatosCodigoMed);
+      populateSelect('map-fatos-dose', colunasFatos, nomesPadrao.fatosDose);
+      populateSelect('map-fatos-unidade', colunasFatos, nomesPadrao.fatosUnidade);
+      
+      populateSelect('map-dim-prontuario', colunasDimensoes, nomesPadrao.dimProntuario);
+      populateSelect('map-dim-data-nasc', colunasDimensoes, nomesPadrao.dimDataNasc);
+      populateSelect('map-dim-sexo', colunasDimensoes, nomesPadrao.dimSexo);
+      populateSelect('map-dim-gestacao', colunasDimensoes, nomesPadrao.dimGestacao);
+      populateSelect('map-dim-divisao', colunasDimensoes, nomesPadrao.dimDivisao);
+      
+      popularDropdownValores();
+    }
+    
+    function populateSelect(selectId, colunas, nomePadrao, altStartsWith = null) {
+      const selectEl = document.getElementById(selectId);
+      if (!selectEl) return;
+      const valorAntigo = selectEl.value;
+      selectEl.innerHTML = '<option value="">-- Mapear Coluna --</option>';
+      let padraoEncontrado = false;
+      colunas.forEach(coluna => {
+        let selected = '';
+        if (coluna.toUpperCase() === nomePadrao.toUpperCase()) {
+          selected = 'selected';
+          padraoEncontrado = true;
+        }
+        selectEl.innerHTML += `<option value="${coluna}" ${selected}>${coluna}</option>`;
+      });
+      if (!padraoEncontrado && altStartsWith) {
+         const alt = colunas.find(c => c.toUpperCase().startsWith(altStartsWith.toUpperCase()));
+         if (alt) selectEl.value = alt;
+      }
+      if (colunas.includes(valorAntigo)) {
+        selectEl.value = valorAntigo;
+      }
+    }
+    
+    function popularDropdownValores() {
+      const aba = document.getElementById('map-aba-fatos').value;
+      const coluna = document.getElementById('map-fatos-intervencao').value;
+      const select = document.getElementById('map-intervencao-valor');
+      
+      if (!aba || !coluna) {
+        select.innerHTML = '<option value="">-- Mapeie a coluna de intervenção --</option>';
+        return;
+      }
+      
+      select.innerHTML = '<option value="">A carregar valores...</option>';
+      select.disabled = true;
+      
+      google.script.run
+        .withSuccessHandler(function(valores) {
+          if (valores.erro) {
+            mostrarErro({ message: valores.erro });
+            return;
+          }
+          select.innerHTML = '';
+          if (valores.length === 0) {
+            select.innerHTML = '<option disabled selected>Nenhum valor encontrado</option>';
+            return;
+          }
+          select.innerHTML = '<option value="" disabled selected>-- Selecione um valor --</option>';
+          valores.forEach(function(val) {
+            select.appendChild(new Option(val, val));
+          });
+          select.disabled = false;
+        })
+        .withFailureHandler(mostrarErro)
+        .obterValoresUnicosDaColuna(aba, coluna); // (ANALISE.GS)
+    }
 
-  function mostrarErro(erro) {
-    mostrarConteudoPrincipal(null); 
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('error').style.display = 'block';
-    document.getElementById('error').textContent = 'Erro: ' + erro.message;
-  }
-</script>
+    function onDataError(erro) {
+      mostrarConteudoPrincipal(erro);
+    }
+    function mostrarConteudoPrincipal(erro) {
+      const splash = document.getElementById('splash-screen');
+      const main = document.getElementById('main-container');
+      splash.style.opacity = '0';
+      setTimeout(function() {
+        splash.style.display = 'none'; 
+        main.style.opacity = '1'; 
+        if (erro) {
+          mostrarErro(erro);
+        }
+      }, 500); 
+    }
+    
+    function iniciarAnalise(tipoLaboratorio) {
+      const loading = document.getElementById('loading');
+      loading.style.display = 'block';
+      
+      const mapeamento = {
+        fatos: {
+          aba: document.getElementById('map-aba-fatos').value,
+          prontuario: document.getElementById('map-fatos-prontuario').value,
+          dataInicio: document.getElementById('map-fatos-data-inicio').value,
+          intervencao: document.getElementById('map-fatos-intervencao').value,
+          codigoMed: document.getElementById('map-fatos-codigo-med').value,
+          dose: document.getElementById('map-fatos-dose').value,
+          unidade: document.getElementById('map-fatos-unidade').value
+        },
+        dimensoes: {
+          aba: document.getElementById('map-aba-dimensoes').value,
+          prontuario: document.getElementById('map-dim-prontuario').value,
+          dataNasc: document.getElementById('map-dim-data-nasc').value,
+          sexo: document.getElementById('map-dim-sexo').value || null,
+          gestacao: document.getElementById('map-dim-gestacao').value || null,
+          divisao: document.getElementById('map-dim-divisao').value || null
+        }
+      };
+      
+      const medicamentoAlvo = document.getElementById('map-intervencao-valor').value;
+
+      try {
+        if (!medicamentoAlvo) {
+          throw new Error("Por favor, selecione um Valor da Intervenção (Dia 0).");
+        }
+        if (!mapeamento.fatos.aba || !mapeamento.fatos.prontuario || !mapeamento.fatos.dataInicio || !mapeamento.fatos.intervencao || !mapeamento.fatos.codigoMed || !mapeamento.fatos.dose || !mapeamento.fatos.unidade) {
+          throw new Error("Mapeamento de Fatos (Eventos) incompleto. Por favor, preencha todos os campos.");
+        }
+        if (!mapeamento.dimensoes.aba || !mapeamento.dimensoes.prontuario || !mapeamento.dimensoes.dataNasc) {
+          throw new Error("Mapeamento de Dimensões (Pacientes) incompleto. Preencha pelo menos Aba, Prontuário e Data de Nascimento.");
+        }
+      } catch (e) {
+        mostrarErro(e);
+        loading.style.display = 'none';
+        return;
+      }
+      
+      const opcoes = {
+        medicamentoAlvo: medicamentoAlvo, 
+        mapeamento: mapeamento
+      };
+      
+      document.getElementById('main-container').style.opacity = '0';
+      document.body.style.backgroundColor = 'var(--cor-fundo-card)'; 
+      const splash = document.getElementById('splash-screen');
+      const splashText = document.getElementById('splash-text');
+      splash.style.display = 'flex';
+      splash.style.opacity = '1';
+
+      if (tipoLaboratorio === 'eficacia') {
+        splashText.innerHTML = 'A preparar Lab de Eficácia<span class="loading-dots"></span>';
+        google.script.run
+          .withSuccessHandler(analiseCompleta)
+          .withFailureHandler(mostrarErro)
+          .abrirModalGraficoInterativo(opcoes); // (ANALISE.GS)
+          
+      } else if (tipoLaboratorio === 'seguranca') {
+        splashText.innerHTML = 'A preparar Lab de Segurança<span class="loading-dots"></span>';
+        google.script.run
+          .withSuccessHandler(analiseCompleta)
+          .withFailureHandler(mostrarErro)
+          .abrirModalLaboratorioRAM(opcoes); // (RAM.gs.txt)
+          
+      } else if (tipoLaboratorio === 'perfil') {
+        splashText.innerHTML = 'A preparar Lab de Perfil de Uso<span class="loading-dots"></span>';
+        google.script.run
+          .withSuccessHandler(analiseCompleta)
+          .withFailureHandler(mostrarErro)
+          .abrirModalPerfilDeUso(opcoes); // <-- (Perfil.gs.txt)
+          
+      } else {
+         // Fallback caso um botão antigo (como 'custo') ainda esteja lá
+         mostrarErro({ message: `Tipo de laboratório '${tipoLaboratorio}' não reconhecido.`});
+      }
+    }
+
+    function analiseCompleta(mensagem) {
+      google.script.host.close();
+    }
+    
+    function mostrarErro(erro) {
+      document.getElementById('splash-screen').style.display = 'none';
+      document.getElementById('main-container').style.opacity = '1';
+      document.body.style.backgroundColor = 'var(--cor-fundo-app)';
+      const errorDiv = document.getElementById('error');
+      errorDiv.style.display = 'block';
+      errorDiv.textContent = 'Erro: ' + erro.message;
+    }
+  </script>
+</body>
+</html>
