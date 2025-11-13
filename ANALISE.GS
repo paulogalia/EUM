@@ -1,34 +1,98 @@
 /**
  * =============================================================
- * MÓDULO 10: ANÁLISE DE TENDÊNCIA (v35 - COM ANÁLISE ESTATÍSTICA T-TEST)
- * (v36 - CORRIGIDO: Removidas funções duplicadas que conflituavam com Utils.gs)
+ * MÓDULO 10: ANÁLISE DE TENDÊNCIA (MOTOR FASE B - MAPEAMENTO TOTAL)
  * =============================================================
  */
 
 /**
- * FUNÇÃO 1: Abre o pop-up "Análise de Tendência" (v3)
+ * FUNÇÃO 1: Abre o pop-up "Análise de Tendência"
  */
 function abrirModalAnaliseMedicamento() {
-  const html = HtmlService.createHtmlOutputFromFile('AnaliseMedicamento')
-    .setWidth(1100)  
-    .setHeight(750); // Altura corrigida para o novo layout
-    
+  const html = HtmlService.createTemplateFromFile('AnaliseMedicamento')
+    .evaluate() 
+    .setWidth(1000)
+    .setHeight(800);
   SpreadsheetApp.getUi().showModalDialog(html, 'Configurar Análise de Intervenção');
 }
 
 /**
- * Guarda as opções de análise no cache e abre o modal do gráfico.
- * @param {object} opcoes As opções vindas do 'AnaliseMedicamento.html'
+ * FUNÇÃO 1.5: Chamada pelo HTML para carregar dados de setup.
+ * (Lê colunas de Fatos, Dimensões e Exames)
+ */
+function obterDadosParaSetupAnalise() {
+  try {
+    const abasParaMapear = [
+      { nome: CONFIG.sheets.prescricao, prefixo: "[Prescrição]" },
+      { nome: CONFIG.sheets.tabelaResumo, prefixo: "[Menu Principal]" },
+      { nome: CONFIG.sheets.exames, prefixo: "[Exames]" }
+    ];
+    
+    let colunasMapeadas = [];
+    const abasDisponiveis = [];
+    
+    abasParaMapear.forEach(abaInfo => {
+      // (Esta função deve existir no seu Utils.gs)
+      const colunas = obterColunasDaAba(abaInfo.nome); 
+      if (colunas.length > 0) {
+        abasDisponiveis.push(abaInfo.nome);
+        colunas.forEach(col => {
+          colunasMapeadas.push({
+            nomeAba: abaInfo.nome,
+            nomeColuna: col,
+            label: `${abaInfo.prefixo} - ${col}`
+          });
+        });
+      }
+    });
+    
+    // (Esta função deve existir no seu Utils.gs)
+    const medicamentos = obterValoresUnicosDaAba_(CONFIG.sheets.prescricao, CONFIG.headers.medicamento);
+
+    return {
+      abas: abasDisponiveis, // Lista de abas que realmente existem
+      colunas: colunasMapeadas, // Lista de objetos rotulados
+      medicamentos: medicamentos // Lista de medicamentos da aba padrão
+    };
+  } catch (e) {
+    Logger.log("Erro em obterDadosParaSetupAnalise: " + e.message);
+    return { erro: e.message };
+  }
+}
+
+/**
+ * FUNÇÃO 1.6: Chamada pelo HTML para buscar valores únicos
+ */
+function obterValoresUnicosDaColuna(nomeAba, nomeColuna) {
+  try {
+    // (Esta função deve existir no seu Utils.gs)
+    return obterValoresUnicosDaAba_(nomeAba, nomeColuna);
+  } catch (e) {
+    return { erro: e.message };
+  }
+}
+
+/**
+ * Guarda as opções (incluindo o mapeamento total) no cache
  */
 function abrirModalGraficoInterativo(opcoes) {
   try {
+    // Validação final do mapeamento antes de salvar
+    if (!opcoes.medicamentoAlvo) throw new Error("Valor da Intervenção não selecionado.");
+    if (!opcoes.mapeamento.fatos.aba || !opcoes.mapeamento.fatos.prontuario || !opcoes.mapeamento.fatos.dataInicio || !opcoes.mapeamento.fatos.intervencao || !opcoes.mapeamento.fatos.codigoMed || !opcoes.mapeamento.fatos.dose || !opcoes.mapeamento.fatos.unidade) {
+      throw new Error("Mapeamento de Fatos (Eventos) incompleto.");
+    }
+    if (!opcoes.mapeamento.dimensoes.aba || !opcoes.mapeamento.dimensoes.prontuario || !opcoes.mapeamento.dimensoes.dataNasc) {
+      throw new Error("Mapeamento de Dimensões (Pacientes) incompleto.");
+    }
+    
     const cache = CacheService.getScriptCache();
     cache.put('opcoesGraficoPendente', JSON.stringify(opcoes), 300); 
 
-    const html = HtmlService.createHtmlOutputFromFile('GraficoInterativo.html')
+    const html = HtmlService.createTemplateFromFile('GraficoInterativo.html')
+      .evaluate()
       .setWidth(1200) 
       .setHeight(700);
-    SpreadsheetApp.getUi().showModalDialog(html, `Laboratório de Eficácia`); // Nome atualizado
+    SpreadsheetApp.getUi().showModalDialog(html, `Laboratório de Eficácia`);
     
     return { sucesso: true };
   } catch (e) {
@@ -37,166 +101,234 @@ function abrirModalGraficoInterativo(opcoes) {
   }
 }
 
+
 /**
- * Esta é a função principal que busca TODOS os dados (Exames E Doses).
+ * ==================================================================
+ * FUNÇÃO 2 (O NOVO "CÉREBRO"): BUSCAR DADOS (MOTOR FASE B)
+ * ==================================================================
  */
 function buscarDadosParaGrafico() {
-  Logger.log(`Iniciando 'buscarDadosParaGrafico (v35)'...`);
+  Logger.log(`Iniciando 'buscarDadosParaGrafico (Motor Fase B)'...`);
   
   let dadosInjetados = {};
-  let opcoes;
-
+  let opcoes, mapaFatos, mapaDimensoes;
+  
   try {
-    // 1. Recupera as opções do cache
+    // 1. Recupera as opções (COM MAPEAMENTO TOTAL) do cache
     const cache = CacheService.getScriptCache();
     const opcoesString = cache.get('opcoesGraficoPendente');
     if (!opcoesString) {
-      throw new Error("Sessão expirada ou opções não encontradas. Por favor, feche e abra o configurador novamente.");
+      throw new Error("Sessão expirada. Por favor, feche e abra o configurador novamente.");
     }
     opcoes = JSON.parse(opcoesString);
+    mapaFatos = opcoes.mapeamento.fatos;
+    mapaDimensoes = opcoes.mapeamento.dimensoes;
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    // --- 2. Carregar Dados ---
-    const prescricaoSheet = ss.getSheetByName(CONFIG.sheets.prescricao);
+    
+    // --- 2. Carregar Dados Brutos ---
+    const fatosSheet = ss.getSheetByName(mapaFatos.aba);
+    if (!fatosSheet) throw new Error(`Aba de Fatos '${mapaFatos.aba}' não encontrada.`);
+    const fatosData = fatosSheet.getDataRange().getValues();
+    const hFatos = fatosData.shift(); // Tira cabeçalho
+
+    const dimensoesSheet = ss.getSheetByName(mapaDimensoes.aba);
+    if (!dimensoesSheet) throw new Error(`Aba de Dimensões '${mapaDimensoes.aba}' não encontrada.`);
+    const dimensoesData = dimensoesSheet.getDataRange().getValues();
+    const hDimensoes = dimensoesData.shift(); // Tira cabeçalho
+    
     const examesSheet = ss.getSheetByName(CONFIG.sheets.exames);
-    if (!prescricaoSheet) throw new Error("Aba '" + CONFIG.sheets.prescricao + "' não encontrada.");
-    if (!examesSheet) throw new Error("Aba '" + CONFIG.sheets.exames + "' não encontrada.");
-
-    const prescricaoData = prescricaoSheet.getDataRange().getValues();
+    if (!examesSheet) throw new Error(`Aba '${CONFIG.sheets.exames}' não encontrada.`);
     const examesData = examesSheet.getDataRange().getValues();
-    const patientMap = buildPatientMap_(); // <-- Agora usa a função do Utils.gs
+    const hExames = examesData.shift();
     
-    // Índices da Prescrição
-    const hPresc = prescricaoData.shift(); // Tira o cabeçalho
-    const idxPrescPront = hPresc.indexOf(CONFIG.headers.prontuario);
-    const idxPrescData = hPresc.indexOf(CONFIG.headers.dataInicio);
-    const idxPrescMed = hPresc.indexOf(CONFIG.headers.medicamento);
-    const idxPrescTaxa = hPresc.indexOf(CONFIG.headers.colTaxaResultante); 
+    // --- 3. Carregar Mapas de Utilidade (Funções do Utils.gs) ---
+    const dicionarioMap = buildDicionarioMap_();
+    const weightMap = buildAndCacheWeightMap(false);
     
-    if (idxPrescPront === -1 || idxPrescData === -1 || idxPrescMed === -1) {
-      throw new Error("Colunas essenciais (Prontuário, Data Início, Medicamento) não encontradas na aba 'Prescrição de Doses'.");
-    }
-    if (idxPrescTaxa === -1) {
-      throw new Error("Coluna '" + CONFIG.headers.colTaxaResultante + "' não encontrada na aba 'Prescrição de Doses'. Esta coluna é necessária para a sobreposição de dose.");
-    }
-
-    // Índices dos Exames
-    const hExames = examesData.shift(); // Tira o cabeçalho
-    const idxExamePront = hExames.indexOf(CONFIG.headers.prontuario);
-    const idxExameData = hExames.indexOf(CONFIG.headers.exameData);
-    const idxExameNome = hExames.indexOf(CONFIG.headers.exameNome);
-    const idxExameValor = hExames.indexOf(CONFIG.headers.exameValor);
-    const idxExameAnalise = hExames.indexOf(CONFIG.headers.exameAnalise); 
-    const idxExameRefMin = hExames.indexOf(CONFIG.headers.exameRefMin);
-    const idxExameRefMax = hExames.indexOf(CONFIG.headers.exameRefMax);
-    if (idxExamePront === -1) throw new Error("Coluna '" + CONFIG.headers.prontuario + "' não encontrada na aba 'Exames'.");
-    if (idxExameRefMin === -1 || idxExameRefMax === -1) {
-      throw new Error("As colunas 'REF_MIN' ou 'REF_MAX' não foram encontradas na aba 'Exames'. Rode o 'Processar Análise de Exames' primeiro.");
-    }
-    if (idxExameAnalise === -1) {
-      throw new Error("Coluna '" + CONFIG.headers.exameAnalise + "' não encontrada na aba 'Exames'. Esta coluna é necessária para o Gráfico de Proporção. Rode 'Processar Análise de Exames'.");
+    // --- 4. Encontrar Índices Mapeados (Dimensões) ---
+    const idxDim = {
+      prontuario: hDimensoes.indexOf(mapaDimensoes.prontuario),
+      dataNasc: hDimensoes.indexOf(mapaDimensoes.dataNasc),
+      sexo: mapaDimensoes.sexo ? hDimensoes.indexOf(mapaDimensoes.sexo) : -1,
+      gestacao: mapaDimensoes.gestacao ? hDimensoes.indexOf(mapaDimensoes.gestacao) : -1,
+      divisao: mapaDimensoes.divisao ? hDimensoes.indexOf(mapaDimensoes.divisao) : -1
+    };
+    if (idxDim.prontuario === -1 || idxDim.dataNasc === -1) {
+      throw new Error(`Colunas Prontuário ('${mapaDimensoes.prontuario}') ou Data de Nascimento ('${mapaDimensoes.dataNasc}') não encontradas na aba '${mapaDimensoes.aba}'.`);
     }
 
-
-    // --- 3. Encontrar "Dia 0" (Início da Intervenção) ---
+    // --- 5. Encontrar Índices Mapeados (Fatos) ---
+    const idxFatos = {
+      prontuario: hFatos.indexOf(mapaFatos.prontuario),
+      dataInicio: hFatos.indexOf(mapaFatos.dataInicio),
+      intervencao: hFatos.indexOf(mapaFatos.intervencao), // A coluna para filtrar (ex: MEDICAMENTO)
+      codigoMed: hFatos.indexOf(mapaFatos.codigoMed),
+      dose: hFatos.indexOf(mapaFatos.dose),
+      unidade: hFatos.indexOf(mapaFatos.unidade)
+    };
+    if (Object.values(idxFatos).some(i => i === -1)) {
+      throw new Error(`Mapeamento de Fatos incompleto. Uma ou mais colunas não foram encontradas na aba '${mapaFatos.aba}'. Verifique o mapeamento.`);
+    }
+    
+    // --- 6. Encontrar Índices Mapeados (Exames) ---
+    const idxExames = {
+      prontuario: hExames.indexOf(CONFIG.headers.prontuario),
+      data: hExames.indexOf(CONFIG.headers.exameData),
+      nome: hExames.indexOf(CONFIG.headers.exameNome),
+      valor: hExames.indexOf(CONFIG.headers.exameValor),
+      analise: hExames.indexOf(CONFIG.headers.exameAnalise),
+      refMin: hExames.indexOf(CONFIG.headers.exameRefMin),
+      refMax: hExames.indexOf(CONFIG.headers.exameRefMax)
+    };
+    if (Object.values(idxExames).some(i => i === -1)) {
+      throw new Error("Colunas essenciais (Prontuário, Data, Nome, Valor, etc.) não encontradas na aba 'Exames'. Rode o 'Processar Análise de Exames' primeiro.");
+    }
+    
+    // --- 7. (APOSENTA buildPatientMap_) Construir o Mapa de Pacientes Dinâmico ---
+    Logger.log("Construindo PatientMap dinâmico...");
+    const patientMap = {};
+    const colunasDinamicas = {}; // Para guardar os nomes das colunas de filtro (ex: "Sexo")
+    
+    dimensoesData.forEach(row => {
+      const prontuario = String(row[idxDim.prontuario]).trim();
+      if (!prontuario) return;
+      
+      let dataNasc = null;
+      try { dataNasc = new Date(row[idxDim.dataNasc]); } catch (e) {}
+      
+      const patient = {
+        prontuario: prontuario,
+        dataNasc: dataNasc,
+      };
+      
+      // Adiciona campos dinâmicos (Sexo, Gestação, Divisão)
+      if (idxDim.sexo !== -1) {
+        const nomeColuna = mapaDimensoes.sexo; // Ex: "SEXO"
+        patient[nomeColuna] = String(row[idxDim.sexo] || "N/D").trim();
+        colunasDinamicas[nomeColuna] = true;
+      }
+      if (idxDim.gestacao !== -1) {
+        const nomeColuna = mapaDimensoes.gestacao; // Ex: "IDADE GESTACIONAL"
+        const gestStr = String(row[idxDim.gestacao] || "N/D").toLowerCase();
+        patient[nomeColuna] = (gestStr.includes("prematuro")) ? "Prematuro" : "Padrão/Outro";
+        colunasDinamicas[nomeColuna] = true;
+      }
+      if (idxDim.divisao !== -1) {
+        const nomeColuna = mapaDimensoes.divisao; // Ex: "FABRICANTE"
+        patient[nomeColuna] = String(row[idxDim.divisao] || "N/D").trim();
+        colunasDinamicas[nomeColuna] = true;
+      }
+      
+      patientMap[prontuario] = patient;
+    });
+    Logger.log(`PatientMap dinâmico construído com ${Object.keys(patientMap).length} pacientes.`);
+    
+    // --- 8. Encontrar "Dia 0" (Início da Intervenção) ---
     const pacientesAlvo = {};
     const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-    prescricaoData.forEach(row => {
-      const prontuario = String(row[idxPrescPront] || "").trim();
-      const medicamento = row[idxPrescMed];
-      const dataInicio = new Date(row[idxPrescData]);
-      if (medicamento === opcoes.medicamento && prontuario && !isNaN(dataInicio.getTime())) { 
+    
+    fatosData.forEach(row => {
+      const prontuario = String(row[idxFatos.prontuario] || "").trim();
+      const valorIntervencao = String(row[idxFatos.intervencao] || "").trim();
+      const dataInicio = new Date(row[idxFatos.dataInicio]);
+      
+      // Verifica se a linha é do paciente E da intervenção-alvo
+      if (patientMap[prontuario] && valorIntervencao === opcoes.medicamentoAlvo && !isNaN(dataInicio.getTime())) { 
         if (!pacientesAlvo[prontuario] || dataInicio.getTime() < pacientesAlvo[prontuario]) {
-          pacientesAlvo[prontuario] = dataInicio.getTime(); 
+          pacientesAlvo[prontuario] = dataInicio.getTime(); // Salva o Timestamp do "Dia 0"
         }
       }
     });
-
-    // --- 4. Aplicar Filtros de População ---
-    let prontuariosValidos = Object.keys(pacientesAlvo);
-    prontuariosValidos = prontuariosValidos.filter(prontuario => {
-      const patient = patientMap[prontuario];
-      if (!patient) return false; 
-      if (!patient.dataNasc) return false; // Ignora pacientes sem data de nascimento para o filtro de idade
-      if (opcoes.filtrosPop.sexo !== 'todos' && patient.sexo !== opcoes.filtrosPop.sexo) return false;
-      const éPrematuro = patient.éPrematuro;
-      if (opcoes.filtrosPop.prematuridade === 'prematuro' && !éPrematuro) return false;
-      if (opcoes.filtrosPop.prematuridade === 'padrao' && éPrematuro) return false;
-      return true;
-    });
+    
+    const prontuariosValidos = Object.keys(pacientesAlvo);
     if (prontuariosValidos.length === 0) {
-      throw new Error("Nenhum paciente encontrado para '" + opcoes.medicamento + "' que corresponda aos seus filtros (verifique se todos têm data de nascimento).");
+      throw new Error(`Nenhum paciente encontrado para a intervenção '${opcoes.medicamentoAlvo}' que também exista na aba '${mapaDimensoes.aba}'.`);
     }
 
-    // --- 5. Recolher dados brutos ---
+    // --- 9. Recolher dados brutos (Exames e Doses) ---
     const dadosBrutosParaGrafico = [];
     
     // Loop 1: Recolher EXAMES
     examesData.forEach(row => {
-      const prontuario = String(row[idxExamePront] || "").trim();
-      const nomeExame = String(row[idxExameNome] || "").trim().toLowerCase();
+      const prontuario = String(row[idxExames.prontuario] || "").trim();
       
-      if (prontuariosValidos.includes(prontuario)) { 
-        const dataExame = new Date(row[idxExameData]);
-        const valor = parseFloat(row[idxExameValor]);
-        const analise = row[idxExameAnalise]; 
-        const refMin = parseFloat(row[idxExameRefMin]);
-        const refMax = parseFloat(row[idxExameRefMax]);
-        
-        if (isNaN(valor) || !nomeExame || isNaN(dataExame.getTime())) return; 
+      if (pacientesAlvo[prontuario]) { // Se este paciente está na nossa coorte
+        const dataExame = new Date(row[idxExames.data]);
+        const valor = parseFloat(row[idxExames.valor]);
+        if (isNaN(valor) || isNaN(dataExame.getTime())) return; 
 
+        const patient = patientMap[prontuario];
         const dataIntervencao = pacientesAlvo[prontuario];
         const diasRelativos = Math.floor((dataExame.getTime() - dataIntervencao) / ONE_DAY_MS);
-        const patient = patientMap[prontuario];
         
-        let dataNascPacienteMs = patient.dataNasc.getTime(); // Já verificámos que não é nulo
-        
-        dadosBrutosParaGrafico.push({
+        const dataPoint = {
           prontuario: prontuario,
-          nomePaciente: patient.nome,
-          sexo: patient.sexo,
-          éPrematuro: patient.éPrematuro,
-          dataNascPacienteMs: dataNascPacienteMs, 
+          dataNascPacienteMs: patient.dataNasc ? patient.dataNasc.getTime() : null,
           diasRelativos: diasRelativos,
-          nomeExame: nomeExame,
+          nomeExame: String(row[idxExames.nome] || "N/D").trim().toLowerCase(),
           valor: valor,
-          analise: analise, 
-          refMin: refMin,
-          refMax: refMax,
+          analise: row[idxExames.analise],
+          refMin: parseFloat(row[idxExames.refMin]),
+          refMax: parseFloat(row[idxExames.refMax]),
           dataExameMs: dataExame.getTime() 
+        };
+        
+        // Adiciona dinamicamente os campos de dimensão (Sexo, Divisão, etc.)
+        Object.keys(colunasDinamicas).forEach(key => {
+          dataPoint[key] = patient[key];
         });
+        
+        dadosBrutosParaGrafico.push(dataPoint);
       }
     });
     
-    // Loop 2: Recolher DOSES
-    prescricaoData.forEach(row => {
-      const prontuario = String(row[idxPrescPront] || "").trim();
+    // Loop 2: Recolher DOSES (Cálculo "On-the-fly")
+    fatosData.forEach(row => {
+      const prontuario = String(row[idxFatos.prontuario] || "").trim();
       
-      if (prontuariosValidos.includes(prontuario)) {
-        const dataDose = new Date(row[idxPrescData]);
-        const valorTaxa = parseFloat(row[idxPrescTaxa]);
+      if (pacientesAlvo[prontuario]) { // Se este paciente está na nossa coorte
+        const dataDose = new Date(row[idxFatos.dataInicio]);
+        const codigoMed = String(row[idxFatos.codigoMed] || "").trim();
+        const doseValor = parseFloat(row[idxFatos.dose]);
+        const doseUnidade = String(row[idxFatos.unidade] || "").trim().toUpperCase();
+
+        if (isNaN(doseValor) || !codigoMed || !doseUnidade || isNaN(dataDose.getTime())) return;
         
-        if (isNaN(valorTaxa) || isNaN(dataDose.getTime())) return;
+        const chaveDicionario = `${codigoMed}_${doseUnidade}`;
+        const regra = dicionarioMap[chaveDicionario];
+        if (!regra) {
+          throw new Error(`Regra não encontrada no DICIONÁRIO_MEDICAMENTOS para: CÓDIGO=${codigoMed}, UNIDADE=${doseUnidade}.`);
+        }
         
+        const doseEmMg = doseValor * regra.fatorConversao;
+        const peso = findLatestWeightOptimized(prontuario, dataDose); // Do Utils.gs
+        const valorTaxa = (peso && peso > 0) ? (doseEmMg / peso) : null;
+        
+        if (valorTaxa === null) return; // Não plota se não achou peso
+        
+        const patient = patientMap[prontuario];
         const dataIntervencao = pacientesAlvo[prontuario];
         const diasRelativos = Math.floor((dataDose.getTime() - dataIntervencao) / ONE_DAY_MS);
-        const patient = patientMap[prontuario];
-        let dataNascPacienteMs = patient.dataNasc.getTime();
-
-        dadosBrutosParaGrafico.push({
+        
+        const dataPoint = {
           prontuario: prontuario,
-          nomePaciente: patient.nome,
-          sexo: patient.sexo,
-          éPrematuro: patient.éPrematuro,
-          dataNascPacienteMs: dataNascPacienteMs, 
+          dataNascPacienteMs: patient.dataNasc ? patient.dataNasc.getTime() : null,
           diasRelativos: diasRelativos,
-          nomeExame: 'dose_intervenção', // Nome especial
+          nomeExame: 'dose_intervenção',
           valor: valorTaxa,
-          analise: 'N/A', // Dose não tem análise
+          analise: 'N/A',
           refMin: null,
           refMax: null,
-          dataExameMs: dataDose.getTime() // Reutiliza o campo
+          dataExameMs: dataDose.getTime()
+        };
+        
+        // Adiciona dinamicamente os campos de dimensão (Sexo, Divisão, etc.)
+        Object.keys(colunasDinamicas).forEach(key => {
+          dataPoint[key] = patient[key];
         });
+        
+        dadosBrutosParaGrafico.push(dataPoint);
       }
     });
     
@@ -204,16 +336,17 @@ function buscarDadosParaGrafico() {
       throw new Error("Nenhum dado de exame ou dose correspondente foi encontrado para a população selecionada.");
     }
 
-    // --- 6. Preparar dados para RETORNO ---
+    // --- 10. Preparar dados para RETORNO ---
     dadosInjetados = {
       sucesso: true,
       info: {
-        medicamento: opcoes.medicamento,
-        configGrafico: opcoes.configGrafico
+        medicamento: opcoes.medicamentoAlvo,
+        // Envia as colunas de filtro que foram mapeadas
+        colunasFiltro: Object.keys(colunasDinamicas) 
       },
       rawData: dadosBrutosParaGrafico
     };
-
+    
   } catch (e) {
     Logger.log("ERRO FATAL em buscarDadosParaGrafico: " + e.message + "\nStack: " + e.stack);
     dadosInjetados = {
@@ -222,7 +355,6 @@ function buscarDadosParaGrafico() {
     };
   }
   
-  // Retorna o objeto (sucesso ou erro) como um texto JSON
   return JSON.stringify(dadosInjetados);
 }
 
@@ -232,7 +364,6 @@ function buscarDadosParaGrafico() {
  * FUNÇÃO DE EXPORTAÇÃO
  * =============================================================
  */
-
 function exportarDadosParaPlanilha(dadosAgregados) {
   try {
     if (!dadosAgregados || dadosAgregados.length === 0) {
@@ -245,15 +376,12 @@ function exportarDadosParaPlanilha(dadosAgregados) {
 
     let folha = ss.getSheetByName(nomeFolha);
     if (folha) {
-      folha.clear(); // Limpa se por algum milagre já existir
+      folha.clear();
     } else {
       folha = ss.insertSheet(nomeFolha);
     }
 
-    // Colar os dados
     folha.getRange(1, 1, dadosAgregados.length, dadosAgregados[0].length).setValues(dadosAgregados);
-
-    // Formatação
     folha.getRange(1, 1, 1, dadosAgregados[0].length).setFontWeight("bold").setBackground("#f4f4f4");
     folha.autoResizeColumns(1, dadosAgregados[0].length);
     folha.setFrozenRows(1);
@@ -275,48 +403,61 @@ function exportarDadosParaPlanilha(dadosAgregados) {
 
 /**
  * Função principal do Teste T, chamada pelo frontend.
- * @param {number[]} arrayAntes - Array de valores brutos do período "Antes".
- * @param {number[]} arrayDepois - Array de valores brutos do período "Depois".
- * @return {object} - { p, t_stat, df, interpretacao }
+ * @param {Array<object>} arraysParaTestar - Array de objetos { nome, antes: [], depois: [] }
+ * @return {Array<object>} - Array de resultados { nome, p, t, df, ... }
  */
-function executarTesteT(arrayAntes, arrayDepois) {
-  try {
-    if (!arrayAntes || arrayAntes.length < 2 || !arrayDepois || arrayDepois.length < 2) {
-      throw new Error("É necessário ter pelo menos 2 pontos de dados em CADA período ('Antes' e 'Depois') para calcular o Teste T.");
+function executarTesteTMultiCoorte(arraysParaTestar) {
+  const resultadosFinais = [];
+
+  arraysParaTestar.forEach(coorte => {
+    try {
+      const arrayAntes = coorte.antes;
+      const arrayDepois = coorte.depois;
+
+      if (!arrayAntes || arrayAntes.length < 2 || !arrayDepois || arrayDepois.length < 2) {
+        throw new Error("É necessário ter pelo menos 2 pontos de dados em CADA período.");
+      }
+      
+      const statsAntes = calcularEstatisticas_(arrayAntes); // Do Utils.gs
+      const statsDepois = calcularEstatisticas_(arrayDepois); // Do Utils.gs
+
+      const resultado = calcularPValor_(statsAntes, statsDepois);
+
+      let interpretacao = "Não significativo (p > 0.05)";
+      if (resultado.p < 0.001) {
+        interpretacao = "Altamente Significativo (p < 0.001)";
+      } else if (resultado.p < 0.01) {
+        interpretacao = "Muito Significativo (p < 0.01)";
+      } else if (resultado.p < 0.05) {
+        interpretacao = "Significativo (p < 0.05)";
+      }
+
+      resultadosFinais.push({
+        nome: coorte.nome,
+        p: resultado.p,
+        t: resultado.t,
+        df: resultado.df,
+        interpretacao: interpretacao,
+        mediaAntes: statsAntes.media,
+        nAntes: statsAntes.n,
+        mediaDepois: statsDepois.media,
+        nDepois: statsDepois.n
+      });
+
+    } catch (e) {
+      Logger.log(`Erro no Teste T para ${coorte.nome}: ${e.message}`);
+      resultadosFinais.push({
+        nome: coorte.nome,
+        erro: e.message
+      });
     }
-    
-    // 1. Calcular estatísticas para ambos os grupos
-    const statsAntes = calcularEstatisticas_(arrayAntes); // <-- Agora usa a função do Utils.gs
-    const statsDepois = calcularEstatisticas_(arrayDepois); // <-- Agora usa a função do Utils.gs
-
-    // 2. Calcular o P-Value (usando Teste T de Welch, que é mais robusto)
-    const resultado = calcularPValor_(statsAntes, statsDepois);
-    
-    // 3. Gerar interpretação
-    let interpretacao = "Não significativo (p > 0.05)";
-    if (resultado.p < 0.001) {
-      interpretacao = "Altamente Significativo (p < 0.001)";
-    } else if (resultado.p < 0.01) {
-      interpretacao = "Muito Significativo (p < 0.01)";
-    } else if (resultado.p < 0.05) {
-      interpretacao = "Significativo (p < 0.05)";
-    }
-
-    return {
-      p: resultado.p,
-      t: resultado.t,
-      df: resultado.df,
-      interpretacao: interpretacao
-    };
-
-  } catch (e) {
-    Logger.log("Erro no Teste T: " + e.message);
-    throw new Error("Falha no cálculo estatístico: " + e.message);
-  }
+  });
+  
+  return resultadosFinais;
 }
 
 /**
- * Calcula o p-value usando o Teste T de Welch (não assume variâncias iguais).
+ * Calcula o p-value usando o Teste T de Welch.
  */
 function calcularPValor_(stats1, stats2) {
   const n1 = stats1.n;
@@ -325,29 +466,31 @@ function calcularPValor_(stats1, stats2) {
   const m2 = stats2.media;
   const v1 = stats1.variancia;
   const v2 = stats2.variancia;
-
-  if (v1 === 0 && v2 === 0) {
-    return { p: 1, t: 0, df: n1 + n2 - 2 }; // Não há variância, não há diferença
+  
+  if (v1 === null || v2 === null) throw new Error("Variância nula recebida.");
+  if (v1 === 0 && v2 === 0 && m1 === m2) {
+    return { p: 1, t: 0, df: n1 + n2 - 2 }; // Sem variância, médias iguais
+  }
+  if (v1 === 0 && v2 === 0 && m1 !== m2) {
+    return { p: 0, t: Infinity, df: n1 + n2 - 2 }; // Sem variância, médias diferentes
+  }
+  
+  // Evita divisão por zero se n=1
+  if (n1 < 2 || n2 < 2) {
+     throw new Error("Não é possível calcular Teste T com n < 2.");
   }
 
-  // 1. Calcular a estatística T (t-statistic)
   const t_stat = (m1 - m2) / Math.sqrt(v1/n1 + v2/n2);
-
-  // 2. Calcular os Graus de Liberdade (df) usando a fórmula de Welch-Satterthwaite
   const df_numerator = Math.pow(v1/n1 + v2/n2, 2);
   const df_denominator = (Math.pow(v1/n1, 2) / (n1 - 1)) + (Math.pow(v2/n2, 2) / (n2 - 1));
   const df = df_numerator / df_denominator;
-
-  // 3. Calcular o p-value (2-caudas) a partir de t e df
+  
   const p_value = tDist2T(Math.abs(t_stat), df);
-
   return { p: p_value, t: t_stat, df: df };
 }
 
 
 // --- Funções de Suporte Matemático (Logaritmo Gamma e Beta Incompleta) ---
-// Estas são funções estatísticas padrão para calcular a CDF da Distribuição T.
-
 function gammaln(x) {
   const j = [0.9999999999998099, 676.5203681218851, -1259.1392167224028,
              771.3234287776531, -176.6150291621406, 12.507343278686905,
@@ -363,7 +506,8 @@ function gammaln(x) {
 }
 
 function betainc(x, a, b) {
-  const bt = (x === 0 || x === 1) ? 0 : Math.exp(gammaln(a + b) - gammaln(a) - gammaln(b) + a * Math.log(x) + b * Math.log(1 - x));
+  const bt = (x === 0 || x === 1) ?
+  0 : Math.exp(gammaln(a + b) - gammaln(a) - gammaln(b) + a * Math.log(x) + b * Math.log(1 - x));
   if (x < (a + 1) / (a + b + 2)) {
     return bt * betacf(x, a, b) / a;
   }
