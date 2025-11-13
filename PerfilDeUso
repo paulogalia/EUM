@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  
+  <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent(); ?>
+  
+  <style>
+    /* Este layout é idêntico ao Lab de Eficácia/Segurança */
+    .container-lab {
+      display: grid;
+      grid-template-columns: 320px 1fr; /* Painel de Controlo + Gráfico */
+      grid-template-rows: 1fr;
+      height: 100vh;
+    }
+    
+    /* Inputs "gordinhos" */
+    .control-group select {
+      padding: 12px;
+      font-size: 1em;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="splash-screen">
+    <div class="spinner"></div>
+    <div id="splash-text">A carregar dados do perfil de uso...</div>
+  </div>
+
+  <div class="container-lab" id="main-container" style="opacity: 0;">
+    
+    <div class="control-panel">
+      <h4>Lab. Perfil de Uso</h4>
+      <p style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; border: none; padding: 0;">
+        Analise os dados categóricos e numéricos da sua coorte.
+      </p>
+      
+      <div class="control-group">
+        <label for="select-x-agrupar">1. Agrupar Por (Eixo X):</label>
+        <select id="select-x-agrupar">
+          <option value="">A carregar colunas...</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label for="select-y-calcular">2. Calcular (Eixo Y):</label>
+        <select id="select-y-calcular">
+          <option value="">A carregar colunas...</option>
+        </select>
+      </div>
+      
+      <div class="control-group">
+        <label for="select-chart-type">3. Tipo de Gráfico:</label>
+        <select id="select-chart-type">
+          <option value="bar">Gráfico de Barras</option>
+          <option value="pie">Gráfico de Pizza</option>
+          <option value="table">Tabela de Frequência</option>
+        </select>
+      </div>
+      
+      <br>
+      <button class="action" onclick="desenharGrafico()">🔄 Gerar Análise "X por Y"</button>
+    </div>
+    
+    <div class="chart-container">
+      <div id="graficoPlotly">
+        </div>
+    </div>
+  </div>
+
+  <div id="error-container">
+    <h3>Falha ao Carregar o Laboratório</h3>
+    <pre id="error-message"></pre>
+  </div>
+
+
+  <script>
+    let globalRawData = [];
+    let infoProjeto = {};
+    let colunasCategoricas = [];
+    let colunasNumericas = [];
+
+    window.addEventListener('load', iniciarLab);
+
+    function iniciarLab() {
+      if (typeof Plotly === 'undefined') {
+        mostrarPainelDeErro("Falha ao carregar Plotly.js.");
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(onDadosRecebidos)
+        .withFailureHandler(onErroAoReceber)
+        .buscarDadosParaPerfilDeUso(); // (Perfil.gs.txt)
+    }
+    
+    function onErroAoReceber(erro) {
+      mostrarPainelDeErro(erro.message);
+    }
+    
+    function onDadosRecebidos(dadosJsonString) {
+      try {
+        const dadosInjetados = JSON.parse(dadosJsonString);
+        if (!dadosInjetados) throw new Error("O backend retornou 'null'.");
+        if (dadosInjetados.sucesso === false) throw new Error(dadosInjetados.erro);
+        
+        console.log("Dados recebidos:", dadosInjetados);
+        globalRawData = dadosInjetados.rawData;
+        infoProjeto = dadosInjetados.info;
+        
+        // Processa as colunas para o "X por Y"
+        processarColunas(dadosInjetados.rawData);
+        
+        popularDropdowns();
+        mostrarConteudoPrincipal();
+        
+      } catch (e) {
+        onErroAoReceber(e);
+      }
+    }
+
+    // Identifica quais colunas são texto (para "Agrupar Por") e quais são números (para "Calcular")
+    function processarColunas(rawData) {
+      if (rawData.length === 0) return;
+      
+      const primeiroEvento = rawData[0];
+      const colunasIgnoradas = ['prontuario', 'dataNascPacienteMs', 'dataExameMs'];
+      
+      Object.keys(primeiroEvento).forEach(coluna => {
+        if (colunasIgnoradas.includes(coluna)) return;
+        
+        const valor = primeiroEvento[coluna];
+        if (typeof valor === 'number' && !isNaN(valor)) {
+          colunasNumericas.push(coluna);
+        } else {
+          // Assume que qualquer outra coisa é categórica (texto, data, etc.)
+          colunasCategoricas.push(coluna);
+        }
+      });
+      
+      console.log("Colunas Categóricas (X):", colunasCategoricas);
+      console.log("Colunas Numéricas (Y):", colunasNumericas);
+    }
+
+    function popularDropdowns() {
+      const selX = document.getElementById('select-x-agrupar');
+      const selY = document.getElementById('select-y-calcular');
+      
+      selX.innerHTML = '';
+      colunasCategoricas.sort().forEach(col => {
+        selX.innerHTML += `<option value="${col}">${col}</option>`;
+      });
+      
+      selY.innerHTML = '<option value="contagem_eventos">Contagem de Eventos</option>';
+      colunasNumericas.sort().forEach(col => {
+        selY.innerHTML += `<option value="soma_${col}">Soma de ${col}</option>`;
+        selY.innerHTML += `<option value="media_${col}">Média de ${col}</option>`;
+      });
+    }
+
+    // O "Motor X por Y"
+    function desenharGrafico() {
+      const colunaX = document.getElementById('select-x-agrupar').value;
+      const calculoY = document.getElementById('select-y-calcular').value;
+      const tipoGrafico = document.getElementById('select-chart-type').value;
+      
+      if (!colunaX || !calculoY) {
+        alert("Por favor, selecione ambos os eixos.");
+        return;
+      }
+
+      // 1. Agrega os dados
+      const agregador = {}; // { "Categoria A": [], "Categoria B": [] }
+      
+      globalRawData.forEach(row => {
+        const categoria = String(row[colunaX] || "N/D").trim();
+        if (!agregador[categoria]) {
+          agregador[categoria] = [];
+        }
+        agregador[categoria].push(row);
+      });
+      
+      // 2. Calcula os valores X e Y
+      const labelsX = Object.keys(agregador).sort();
+      const valoresY = [];
+      const hoverText = [];
+
+      labelsX.forEach(categoria => {
+        const eventos = agregador[categoria];
+        let valorCalculado = 0;
+        let textoHover = "";
+
+        if (calculoY === 'contagem_eventos') {
+          valorCalculado = eventos.length;
+          textoHover = `<b>${categoria}</b><br>Contagem: ${valorCalculado}`;
+          
+        } else if (calculoY.startsWith('soma_')) {
+          const nomeColunaNum = calculoY.replace('soma_', '');
+          valorCalculado = eventos.reduce((soma, row) => soma + (parseFloat(row[nomeColunaNum]) || 0), 0);
+          textoHover = `<b>${categoria}</b><br>Soma: ${valorCalculado.toFixed(2)}`;
+          
+        } else if (calculoY.startsWith('media_')) {
+          const nomeColunaNum = calculoY.replace('media_', '');
+          const valores = eventos.map(row => parseFloat(row[nomeColunaNum]) || 0);
+          valorCalculado = valores.reduce((s, v) => s + v, 0) / valores.length;
+          textoHover = `<b>${categoria}</b><br>Média: ${valorCalculado.toFixed(2)}`;
+        }
+        
+        valoresY.push(valorCalculado);
+        hoverText.push(textoHover);
+      });
+      
+      // 3. Desenha o Gráfico
+      let trace, layout;
+      const tituloGrafico = `${calculoY.replace(/_/g, ' ')} POR ${colunaX}`;
+      
+      if (tipoGrafico === 'pie') {
+        trace = {
+          labels: labelsX,
+          values: valoresY,
+          text: hoverText,
+          hoverinfo: 'text+percent+label',
+          type: 'pie'
+        };
+        layout = { title: tituloGrafico };
+        
+      } else if (tipoGrafico === 'table') {
+        trace = {
+          type: 'table',
+          header: {
+            values: [colunaX, calculoY.replace(/_/g, ' ')],
+            align: "left",
+            fill: { color: "var(--cor-primaria)" },
+            font: { color: "white", size: 12, weight: "bold" }
+          },
+          cells: {
+            values: [labelsX, valoresY.map(v => typeof v === 'number' ? v.toFixed(2) : v)],
+            align: "left",
+            fill: { color: "var(--cor-fundo-card)" }
+          }
+        };
+        layout = { title: tituloGrafico };
+        
+      } else { // 'bar'
+        trace = {
+          x: labelsX,
+          y: valoresY,
+          text: hoverText,
+          hoverinfo: 'text',
+          type: 'bar',
+          marker: { color: 'var(--cor-primaria)' }
+        };
+        layout = {
+          title: tituloGrafico,
+          xaxis: { title: colunaX },
+          yaxis: { title: calculoY.replace(/_/g, ' ') }
+        };
+      }
+      
+      Plotly.newPlot('graficoPlotly', [trace], layout);
+    }
+
+    // (Funções de UI 'mostrarPainelDeErro', 'mostrarConteudoPrincipal' - adaptadas)
+    function mostrarPainelDeErro(mensagem) {
+      const splash = document.getElementById('splash-screen');
+      const main = document.getElementById('main-container');
+      const error = document.getElementById('error-container');
+      splash.style.display = 'none';
+      error.style.display = 'block';
+      document.getElementById('error-message').textContent = mensagem;
+      main.style.display = 'none';
+    }
+    function mostrarConteudoPrincipal() {
+      const splash = document.getElementById('splash-screen');
+      const main = document.getElementById('main-container');
+      splash.style.display = 'none'; 
+      main.style.opacity = '1';
+    }
+  </script>
+</body>
+</html>
