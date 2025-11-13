@@ -9,10 +9,11 @@
  * Abre o novo pop-up "Análise de RAMs".
  */
 function abrirModalAnaliseRAM() {
-  const html = HtmlService.createHtmlOutputFromFile('AnaliseRAM')
+  const html = HtmlService.createTemplateFromFile('AnaliseRAM') // <-- CORREÇÃO (O nome do seu ficheiro é AnaliseRAM.html)
+    .evaluate() // <-- CORREÇÃO
     .setWidth(550)
     .setHeight(550);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Análise de Farmacovigilância');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Análise de Farmacigilância');
 }
 
 /**
@@ -290,12 +291,11 @@ function calcularTendemciaRAMs_(opcoesTemporal, eventosRAM, ramHeaders) {
  */
 function abrirModalLaboratorioRAM(opcoes) {
   try {
-    // Guarda as opções no cache (para o 'Dia 0' e filtros)
     const cache = CacheService.getScriptCache();
     cache.put('opcoesRamLabPendente', JSON.stringify(opcoes), 300); 
 
-    // Abre o novo modal do gráfico de RAMs
-    const html = HtmlService.createHtmlOutputFromFile('LaboratorioRAM.html')
+    const html = HtmlService.createTemplateFromFile('LaboratorioRAM') // <-- CORREÇÃO (O seu ficheiro chama-se LaboratorioRAM)
+      .evaluate() // <-- CORREÇÃO
       .setWidth(1200) 
       .setHeight(700);
     SpreadsheetApp.getUi().showModalDialog(html, `Laboratório de Segurança (RAMs)`);
