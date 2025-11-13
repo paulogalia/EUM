@@ -4,77 +4,75 @@
  * =============================================================
  */
 
-/**
- * HELPER 1: Constrói o mapa de dados dos pacientes da 'TABELA'.
+/* * (REMOVIDO - A lógica agora é dinâmica e vive em ANALISE.GS)
+ * function buildPatientMap_() { ... }
  */
-function buildPatientMap_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const tabelaSheet = ss.getSheetByName(CONFIG.sheets.tabelaResumo);
-  if (!tabelaSheet) throw new Error("Aba '" + CONFIG.sheets.tabelaResumo + "' não encontrada.");
-  const data = tabelaSheet.getDataRange().getValues();
-  const headers = data.shift(); 
-  const idx = {
-    prontuario: headers.indexOf(CONFIG.headers.prontuario),
-    nome: headers.indexOf(CONFIG.headers.nomePaciente), 
-    dataNasc: headers.indexOf(CONFIG.headers.dataNascimento),
-    gestacao: headers.indexOf(CONFIG.headers.gestacao),
-    sexo: headers.indexOf(CONFIG.headers.sexo)
-  };
-  if (idx.prontuario === -1 || idx.dataNasc === -1 || idx.sexo === -1 || idx.nome === -1) {
-    throw new Error(`A aba '${CONFIG.sheets.tabelaResumo}' deve conter todas estas colunas (verifique o CONFIG): '${CONFIG.headers.prontuario}', '${CONFIG.headers.dataNascimento}', '${CONFIG.headers.sexo}' e '${CONFIG.headers.nomePaciente}'.`);
+
+/**
+ * HELPER 1: (Movido do CustoEfetividade.gs) Lista colunas de uma aba.
+ */
+function obterColunasDaAba(nomeAba) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(nomeAba);
+    if (!sheet) return []; // Retorna array vazio se a aba não existir
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    return headers.filter(h => h); // Retorna apenas cabeçalhos não-vazios
+  } catch (e) {
+    Logger.log("Erro em obterColunasDaAba: " + e.message);
+    return []; // Retorna array vazio em caso de erro
   }
-  const gestacaoColumnExists = idx.gestacao !== -1;
-  const map = {};
-  data.forEach(row => {
-    const prontuario = String(row[idx.prontuario]).trim();
-    if (!prontuario) return;
-    let dataNasc = null;
-    try {
-      const dataVal = row[idx.dataNasc];
-      if (dataVal) dataNasc = new Date(dataVal);
-    } catch (e) {}
-    let sexo = String(row[idx.sexo] || "").toUpperCase().charAt(0);
-    if (sexo !== "M" && sexo !== "F") sexo = null; 
-    let nome = row[idx.nome] || "Sem Nome";
-    let éPrematuro = false;
-    let semanasGestao = 40; 
-    if (gestacaoColumnExists) {
-      const gestacaoStr = String(row[idx.gestacao] || "").toLowerCase();
-      if (gestacaoStr.includes("prematuro")) {
-        éPrematuro = true;
-        const match = gestacaoStr.match(/(\d+)\s*sem(ana|anas)?/);
-        if (match) semanasGestao = parseInt(match[1], 10);
-        else éPrematuro = false;
-      }
-    }
-    map[prontuario] = {
-      nome: nome, dataNasc: dataNasc, éPrematuro: éPrematuro,
-      semanasGestao: semanasGestao, sexo: sexo
-    };
-  });
-  return map;
 }
 
 /**
- * HELPER 2: Calcula a média E o Desvio Padrão.
+ * HELPER 2 (NOVO): Pega valores únicos de uma coluna específica.
+ */
+function obterValoresUnicosDaAba_(nomeAba, nomeColuna) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(nomeAba);
+    if (!sheet) throw new Error(`Aba '${nomeAba}' não encontrada.`);
+    
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const idxColuna = headers.indexOf(nomeColuna);
+    
+    if (idxColuna === -1) {
+      // Retorna array vazio se a coluna não for encontrada (não é um erro fatal)
+      Logger.log(`Coluna '${nomeColuna}' não encontrada na aba '${nomeAba}'.`);
+      return [];
+    }
+    
+    const data = sheet.getRange(2, idxColuna + 1, sheet.getLastRow() - 1, 1).getValues();
+    const unicos = [...new Set(data.map(row => String(row[0] || "").trim()))].filter(g => g); // Filtra, remove duplicados e vazios
+    
+    return unicos.sort();
+    
+  } catch (e) {
+    Logger.log("Erro em obterValoresUnicosDaAba_: " + e.message);
+    throw e;
+  }
+}
+
+/**
+ * HELPER 3: Calcula estatísticas (Média, DP, Variância)
  */
 function calcularEstatisticas_(arr) {
   if (!arr || arr.length === 0) {
-    return { media: null, n: 0, stdDev: null };
+    return { media: null, n: 0, stdDev: null, variancia: null };
   }
   const n = arr.length;
   const sum = arr.reduce((a, b) => a + b, 0);
   const media = sum / n;
   if (n === 1) {
-    return { media: media, n: 1, stdDev: 0 }; 
+    return { media: media, n: 1, stdDev: 0, variancia: 0 };
   }
   const variancia = arr.map(x => Math.pow(x - media, 2)).reduce((a, b) => a + b, 0) / (n - 1);
   const stdDev = Math.sqrt(variancia);
-  return { media: media, n: n, stdDev: stdDev };
+  return { media: media, n: n, stdDev: stdDev, variancia: variancia };
 }
 
 /**
- * HELPER 3: Calcula apenas a média (atalho).
+ * HELPER 4: Calcula apenas a média (atalho).
  */
 function calcularMedia_(arr) {
   const stats = calcularEstatisticas_(arr);
@@ -83,7 +81,7 @@ function calcularMedia_(arr) {
 
 
 /**
- * HELPER 4: Função genérica para criar e inserir um gráfico do Sheets.
+ * HELPER 5: Função genérica para criar e inserir um gráfico do Sheets.
  */
 function gerarGrafico_(sheet, titulo, tipo, dados, linha, largura, altura, stacked = false) {
   try {
@@ -97,7 +95,7 @@ function gerarGrafico_(sheet, titulo, tipo, dados, linha, largura, altura, stack
       .setOption('title', titulo)
       .setOption('width', largura)
       .setOption('height', altura)
-      .setPosition(linha, 4, 0, 0); 
+      .setPosition(linha, 4, 0, 0);
     if (tipo === Charts.ChartType.PIE) {
       chartBuilder.setOption('pieHole', 0.4);
     }
@@ -106,32 +104,151 @@ function gerarGrafico_(sheet, titulo, tipo, dados, linha, largura, altura, stack
     }
     sheet.insertChart(chartBuilder.build());
     const approxChartRows = Math.ceil(altura / 21) + 1; 
-    return linha + Math.max(approxChartRows, dados.length) + 2; 
+    return linha + Math.max(approxChartRows, dados.length) + 2;
   } catch (e) {
     Logger.log("Erro ao gerar gráfico '" + titulo + "': " + e.message);
     sheet.getRange(linha, 2).setValue("Erro ao gerar gráfico: " + e.message);
-    return linha + 3; 
+    return linha + 3;
   }
 }
 
 /**
- * HELPER 5: Pega a lista de medicamentos para os pop-ups.
+ * HELPER 6: (Movido do CustoEfetividade.gs) Encontra grupos de comparação.
  */
-function obterListaDeMedicamentosUnicos() {
+function obterGruposDeComparacao(nomeAba, nomeColuna) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CONFIG.sheets.prescricao);
-    if (!sheet) throw new Error("Aba '" + CONFIG.sheets.prescricao + "' não encontrada.");
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const idxMed = headers.indexOf(CONFIG.headers.medicamento);
-    if (idxMed === -1) {
-      throw new Error("Coluna '" + CONFIG.headers.medicamento + "' não encontrada.");
-    }
-    const data = sheet.getRange(2, idxMed + 1, sheet.getLastRow() - 1, 1).getValues();
-    const unicos = [...new Set(data.map(row => row[0]))].filter(med => med); 
-    return unicos;
+    return obterValoresUnicosDaAba_(nomeAba, nomeColuna);
   } catch (e) {
-    Logger.log("Erro em obterListaDeMedicamentosUnicos: " + e.message);
+    Logger.log("Erro em obterGruposDeComparacao: " + e.message);
     throw e;
   }
+}
+
+
+/**
+ * HELPER 7: Constrói o mapa de conversão do Dicionário de Medicamentos.
+ */
+function buildDicionarioMap_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dicSheet = ss.getSheetByName(CONFIG.sheets.dicionarioMeds);
+  if (!dicSheet) {
+    throw new Error("Aba '" + CONFIG.sheets.dicionarioMeds + "' não encontrada. Por favor, execute o Setup.");
+  }
+  
+  const data = dicSheet.getDataRange().getValues();
+  const headers = data.shift();
+  
+  const idx = {
+    codigo: headers.indexOf(CONFIG.headers.dicCodigoMed),
+    unidade: headers.indexOf(CONFIG.headers.dicUnPrescrita),
+    fator: headers.indexOf(CONFIG.headers.dicFatorConversao),
+    pa: headers.indexOf(CONFIG.headers.dicPrincipioAtivo)
+  };
+
+  if (Object.values(idx).some(i => i === -1)) {
+    throw new Error("Colunas essenciais não encontradas no '" + CONFIG.sheets.dicionarioMeds + "'. Verifique CONFIG.headers.");
+  }
+  
+  const map = {};
+  data.forEach(row => {
+    const codigo = String(row[idx.codigo]).trim();
+    const unidade = String(row[idx.unidade]).trim().toUpperCase();
+    const fator = parseFloat(row[idx.fator]);
+    
+    if (codigo && unidade && !isNaN(fator)) {
+      const chaveComposta = `${codigo}_${unidade}`;
+      map[chaveComposta] = {
+        fatorConversao: fator,
+        principioAtivo: row[idx.pa]
+      };
+    }
+  });
+  
+  Logger.log(`Mapa do Dicionário de Medicamentos construído com ${Object.keys(map).length} regras.`);
+  return map;
+}
+
+
+/**
+ * HELPER 8: Mapa de Pesos Otimizado
+ */
+function buildAndCacheWeightMap(force = false) {
+  const cache = CacheService.getScriptCache();
+  const CACHE_KEY = 'WEIGHT_MAP';
+  if (!force) {
+    const cachedMap = cache.get(CACHE_KEY);
+    if (cachedMap) {
+      return JSON.parse(cachedMap);
+    }
+  }
+
+  Logger.log("Construindo novo mapa de pesos...");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const pesoSheet = ss.getSheetByName(CONFIG.sheets.peso);
+  if (!pesoSheet) {
+    Logger.log("Aba 'Registro de Peso' não encontrada. Não é possível construir o mapa.");
+    return {};
+  }
+
+  const pesoData = pesoSheet.getDataRange().getValues();
+  const cabecalhosPeso = pesoData.shift();
+  const idxProntuarioPeso = cabecalhosPeso.indexOf(CONFIG.headers.prontuario);
+  const idxDataPeso = cabecalhosPeso.indexOf(CONFIG.headers.dataPeso);
+  const idxPeso = cabecalhosPeso.indexOf(CONFIG.headers.peso);
+  if (idxProntuarioPeso === -1 || idxDataPeso === -1 || idxPeso === -1) {
+    Logger.log("Aviso em buildAndCacheWeightMap: Cabeçalhos faltando na aba 'Registro de Peso'.");
+    return {};
+  }
+
+  const weightMap = {};
+  for (const linha of pesoData) {
+    const prontuario = String(linha[idxProntuarioPeso]).trim();
+    if (!prontuario) continue;
+    const peso = linha[idxPeso];
+    if (typeof peso !== 'number' || isNaN(peso) || peso <= 0) continue;
+    let data;
+    try {
+      const dataValor = linha[idxDataPeso];
+      if (!dataValor) continue;
+      data = new Date(dataValor);
+      if (isNaN(data.getTime())) {
+        if (typeof dataValor === 'string' && dataValor.includes('/')) {
+            const parts = dataValor.split('/');
+            if (parts.length === 3) data = new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
+        }
+      }
+      if (isNaN(data.getTime())) continue;
+    } catch (e) {
+      continue;
+    }
+    if (!weightMap[prontuario]) {
+      weightMap[prontuario] = [];
+    }
+    weightMap[prontuario].push([data.getTime(), peso]);
+  }
+  for (const prontuario in weightMap) {
+    weightMap[prontuario].sort((a, b) => b[0] - a[0]);
+  }
+  cache.put(CACHE_KEY, JSON.stringify(weightMap), 3600);
+  Logger.log("Mapa de pesos construído e salvo no cache.");
+  return weightMap;
+}
+
+/**
+ * HELPER 9: Encontra o peso mais recente.
+ */
+function findLatestWeightOptimized(prontuario, dataAlvo) {
+  const weightMap = buildAndCacheWeightMap(false); 
+  prontuario = String(prontuario).trim();
+  if (!weightMap[prontuario]) {
+    return null;
+  }
+  const pesosDoPaciente = weightMap[prontuario]; 
+  const dataAlvoTime = dataAlvo.getTime();
+  for (const [dataTime, peso] of pesosDoPaciente) {
+    if (dataTime <= dataAlvoTime) {
+      return peso;
+    }
+  }
+  return null;
 }
