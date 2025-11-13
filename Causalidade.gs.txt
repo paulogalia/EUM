@@ -11,9 +11,12 @@
  * (Esta função permanece igual)
  */
 function abrirSidebarAvaliacao_UI() {
-  const html = HtmlService.createHtmlOutputFromFile('AvaliarRAM')
-    .setTitle('Avaliar Causalidade');
-  SpreadsheetApp.getUi().showSidebar(html);
+  // CORREÇÃO: Usar .createTemplateFromFile().evaluate() para processar os scriptlets <?!= ... ?>
+  const html = HtmlService.createTemplateFromFile('AvaliarRAM')
+    .evaluate() // <-- ESTA É A CORREÇÃO
+    .setWidth(600)
+    .setHeight(750); 
+  SpreadsheetApp.getUi().showModalDialog(html, 'Avaliar Causalidade (Naranjo)');
 }
 
 /**
