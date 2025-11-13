@@ -2,38 +2,13 @@
 <html>
 <head>
   <base target="_top">
+  
+  <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent(); ?>
+
   <style>
-    :root {
-      --cor-primaria: #005a9c;
-      --cor-primaria-hover: #004a80;
-      --cor-fundo-app: #f4f7f6;
-      --cor-fundo-card: #ffffff;
-      --cor-borda: #e0e0e0;
-      --cor-texto-titulo: #1f1f1f;
-      --cor-texto-corpo: #444;
-      --sombra-card: 0 4px 12px rgba(0, 0, 0, 0.05);
-      --border-radius: 8px;
+    body {
+      padding: 32px;
     }
-    body, html {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background-color: var(--cor-fundo-app);
-      color: var(--cor-texto-corpo);
-      margin: 0; padding: 32px;
-      line-height: 1.6;
-    }
-    .card {
-      background-color: var(--cor-fundo-card);
-      padding: 24px 32px;
-      border-radius: var(--border-radius);
-      box-shadow: var(--sombra-card);
-      overflow: hidden;
-    }
-    h3 {
-      font-size: 1.9em; font-weight: 700;
-      color: var(--cor-primaria); /* Título Azul */
-      margin: 0 0 4px 0; text-align: center;
-    }
-    p { font-size: 1em; margin-top: 0; }
     .tutorial-box {
       background-color: var(--cor-fundo-app);
       border: 1px dashed var(--cor-primaria);
@@ -41,36 +16,27 @@
       border-radius: var(--border-radius);
       margin: 20px 0;
     }
-    .tutorial-box h4 { margin-top: 0; }
-    
-    button.action {
-      font-size: 1.1em; font-weight: bold; color: #fff;
-      background-color: var(--cor-primaria);
-      border: none; padding: 14px 28px; border-radius: 6px;
-      cursor: pointer; float: right;
-      transition: all 0.2s ease;
+    .tutorial-box h4 { 
+      margin-top: 0; 
+      color: var(--cor-primaria);
     }
-    button.action:hover {
-      background-color: var(--cor-primaria-hover);
-      box-shadow: 0 4px 10px rgba(0, 90, 156, 0.3);
+    .card .action {
+      float: right;
     }
-    
-    #loading, #error { margin-top: 15px; display: none; }
-    #error { color: #dc3545; font-weight: bold; }
   </style>
 </head>
 <body>
   
   <div class="card">
     <h3>Passo 1: O "MENU PRINCIPAL"</h3>
-    <p>O primeiro passo é criar a "espinha dorsal" do seu estudo: a aba `MENU PRINCIPAL`.</p>
+    <p style="text-align: center;">O primeiro passo é criar a "espinha dorsal" do seu estudo: a aba `MENU PRINCIPAL`.</p>
     
     <div class="tutorial-box">
       <h4>O que é isto?</h4>
       <p>Esta é a aba mais importante. É o seu **Registo de Pacientes**. Cada linha representa um paciente único, e todas as outras abas (Exames, Prescrição, RAMs) irão "puxar" os dados daqui.</p>
       
       <p>Este script irá criar automaticamente os 5 cabeçalhos essenciais que a ferramenta precisa para funcionar:</p>
-      <ul style="font-weight: bold;">
+      <ul style="font-weight: bold; padding-left: 20px;">
         <li>PACIENTE</li>
         <li>PRONTUÁRIO</li>
         <li>DATA DE NASCIMENTO</li>
@@ -94,15 +60,13 @@
       document.getElementById('loading').style.display = 'block';
       document.getElementById('error').style.display = 'none';
       
-      // 1. Chama o backend para criar a aba
       google.script.run
         .withSuccessHandler(onAbaCriada)
         .withFailureHandler(mostrarErro)
-        .executarSetupMenuPrincipal(); // <-- Nova função de backend
+        .executarSetupMenuPrincipal();
     }
 
     function onAbaCriada(resultado) {
-      // 2. Após criar a aba, abre a "Página 3" (Módulos)
       google.script.run
         .withSuccessHandler(google.script.host.close)
         .irParaEscolherModulos();
