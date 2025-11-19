@@ -4,10 +4,12 @@
   <base target="_top">
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   
-  <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent(); ?>
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent();
+?>
   
   <style>
-    /* Este layout é idêntico ao Lab de Eficácia/Segurança */
     .container-lab {
       display: grid;
       grid-template-columns: 320px 1fr; /* Painel de Controlo + Gráfico */
@@ -15,11 +17,120 @@
       height: 100vh;
     }
     
-    /* Inputs "gordinhos" */
     .control-group select {
       padding: 12px;
       font-size: 1em;
     }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button.action-afixar {
+      font-size: 1em; 
+      font-weight: bold;
+      background-color: #fff;
+      border: 2px solid #00573D; /* Verde escuro */
+      color: #00573D;
+      padding: 12px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button.action-afixar:hover {
+      background-color: #f0f5f3;
+    }
+    button.action-afixar:disabled {
+      background-color: #eee;
+      border-color: #aaa;
+      color: #aaa;
+      cursor: not-allowed;
+    }
+    #afixar-loading {
+      display: none;
+      text-align: center;
+      font-size: 0.9em;
+      margin-top: 8px;
+    }
+    
+    /* === MUDANÇA 2: Estilos para o Modal de Contexto === */
+    .modal-overlay {
+      display: none; /* Começa escondido */
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-content {
+      background-color: var(--cor-fundo-app); /* Fundo cinza */
+      width: 90%;
+      max-width: 700px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--cor-borda);
+    }
+    .modal-header h4 {
+      margin: 0;
+      color: var(--cor-texto-titulo);
+      font-size: 1.3em;
+    }
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .modal-body .form-group {
+      margin-bottom: 15px;
+    }
+    .modal-body .form-group label {
+      font-weight: bold;
+      font-size: 0.9em;
+      margin-bottom: 5px;
+      display: block;
+    }
+    
+    /* Estilos do Editor Quill DENTRO do modal */
+    #div-contexto-notas {
+      min-height: 120px;
+    }
+    .ql-toolbar.ql-snow {
+      border: 1px solid var(--cor-borda);
+      border-top-left-radius: 6px;
+      border-top-right-radius: 6px;
+      background-color: #fff;
+    }
+    .ql-container.ql-snow {
+      border: 1px solid var(--cor-borda);
+      border-bottom-left-radius: 6px;
+      border-bottom-right-radius: 6px;
+      background-color: #fff;
+    }
+    .ql-editor {
+      min-height: 120px;
+      font-size: 1em;
+    }
+    /* --- FIM DA MUDANÇA 2 --- */
+
   </style>
 </head>
 <body>
@@ -61,10 +172,18 @@
       </div>
       
       <br>
-      <button class="action" onclick="desenharGrafico()">🔄 Gerar Análise "X por Y"</button>
+      
+      <div class="button-row">
+        <button class="action" onclick="desenharGrafico()">🔄 Gerar Análise "X por Y"</button>
+        <button class="action-afixar" id="btn-afixar" onclick="abrirModalContexto()" disabled>
+          📌 Afixar ao Relatório
+        </button>
+        </div>
+      <div id="afixar-loading">A afixar...</div>
+
     </div>
     
-    <div class="chart-container">
+     <div class="chart-container">
       <div id="graficoPlotly">
         </div>
     </div>
@@ -76,17 +195,79 @@
   </div>
 
 
+  <div class="modal-overlay" id="modal-contexto-overlay">
+    <div class="modal-content">
+      
+      <div class="modal-header">
+        <h4>Contextualizar e Afixar Bloco</h4>
+      </div>
+      
+      <div class="modal-body">
+        
+        <div class="form-group">
+          <label for="input-contexto-titulo">Título do Gráfico:</label>
+          <input type="text" id="input-contexto-titulo">
+        </div>
+        
+        <div class_ ="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div>
+            <label for="input-contexto-eixox">Título Eixo X:</label>
+            <input type="text" id="input-contexto-eixox">
+          </div>
+          <div>
+            <label for="input-contexto-eixoy">Título Eixo Y:</label>
+            <input type="text" id="input-contexto-eixoy">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 20px;">
+          <label>Anotação Rápida (Opcional):</label>
+          <div id="div-contexto-notas"></div> 
+        </div>
+
+      </div>
+      
+      <div class="modal-footer" style="padding: 20px 24px; border-top: 1px solid var(--cor-borda); background-color: #fff; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button class="secondary" onclick="fecharModalContexto()" style="width: auto; padding: 10px 20px; border-width: 2px;">Cancelar</button>
+          
+          <div id="loading-modal-salvar" style="display: none; font-size: 0.9em;">A salvar...</div>
+
+          <button class="action" id="btn-salvar-contexto" onclick="salvarContextoECompletarAfixar()" style="width: auto; padding: 12px 28px;">
+            Salvar no Gabinete
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
   <script>
     let globalRawData = [];
     let infoProjeto = {};
     let colunasCategoricas = [];
     let colunasNumericas = [];
 
-    window.addEventListener('load', iniciarLab);
+    let globalLastChartData = null;
+    
+    // --- MUDANÇA 5: Variável para o novo editor ---
+    let globalQuillContexto = null;
+    const quillContextoOptions = {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }]
+        ]
+      },
+      placeholder: 'Escreva a sua principal conclusão ou análise aqui...'
+    };
+    // --- FIM DA MUDANÇA 5 ---
 
+
+    window.addEventListener('load', iniciarLab);
     function iniciarLab() {
-      if (typeof Plotly === 'undefined') {
-        mostrarPainelDeErro("Falha ao carregar Plotly.js.");
+      if (typeof Plotly === 'undefined' || typeof Quill === 'undefined') {
+        mostrarPainelDeErro("Falha ao carregar bibliotecas externas (Plotly ou Quill).");
         return;
       }
       google.script.run
@@ -109,9 +290,7 @@
         globalRawData = dadosInjetados.rawData;
         infoProjeto = dadosInjetados.info;
         
-        // Processa as colunas para o "X por Y"
         processarColunas(dadosInjetados.rawData);
-        
         popularDropdowns();
         mostrarConteudoPrincipal();
         
@@ -120,13 +299,10 @@
       }
     }
 
-    // Identifica quais colunas são texto (para "Agrupar Por") e quais são números (para "Calcular")
     function processarColunas(rawData) {
       if (rawData.length === 0) return;
-      
       const primeiroEvento = rawData[0];
       const colunasIgnoradas = ['prontuario', 'dataNascPacienteMs', 'dataExameMs'];
-      
       Object.keys(primeiroEvento).forEach(coluna => {
         if (colunasIgnoradas.includes(coluna)) return;
         
@@ -134,7 +310,6 @@
         if (typeof valor === 'number' && !isNaN(valor)) {
           colunasNumericas.push(coluna);
         } else {
-          // Assume que qualquer outra coisa é categórica (texto, data, etc.)
           colunasCategoricas.push(coluna);
         }
       });
@@ -146,12 +321,10 @@
     function popularDropdowns() {
       const selX = document.getElementById('select-x-agrupar');
       const selY = document.getElementById('select-y-calcular');
-      
       selX.innerHTML = '';
       colunasCategoricas.sort().forEach(col => {
         selX.innerHTML += `<option value="${col}">${col}</option>`;
       });
-      
       selY.innerHTML = '<option value="contagem_eventos">Contagem de Eventos</option>';
       colunasNumericas.sort().forEach(col => {
         selY.innerHTML += `<option value="soma_${col}">Soma de ${col}</option>`;
@@ -159,8 +332,13 @@
       });
     }
 
-    // O "Motor X por Y"
     function desenharGrafico() {
+      // Limpa o estado do botão "Afixar"
+      globalLastChartData = null;
+      const btnAfixar = document.getElementById('btn-afixar');
+      btnAfixar.disabled = true;
+      btnAfixar.textContent = "📌 Afixar ao Relatório";
+
       const colunaX = document.getElementById('select-x-agrupar').value;
       const calculoY = document.getElementById('select-y-calcular').value;
       const tipoGrafico = document.getElementById('select-chart-type').value;
@@ -171,7 +349,7 @@
       }
 
       // 1. Agrega os dados
-      const agregador = {}; // { "Categoria A": [], "Categoria B": [] }
+      const agregador = {};
       
       globalRawData.forEach(row => {
         const categoria = String(row[colunaX] || "N/D").trim();
@@ -180,7 +358,6 @@
         }
         agregador[categoria].push(row);
       });
-      
       // 2. Calcula os valores X e Y
       const labelsX = Object.keys(agregador).sort();
       const valoresY = [];
@@ -195,14 +372,16 @@
           valorCalculado = eventos.length;
           textoHover = `<b>${categoria}</b><br>Contagem: ${valorCalculado}`;
           
-        } else if (calculoY.startsWith('soma_')) {
+        } else 
+        if (calculoY.startsWith('soma_')) {
           const nomeColunaNum = calculoY.replace('soma_', '');
           valorCalculado = eventos.reduce((soma, row) => soma + (parseFloat(row[nomeColunaNum]) || 0), 0);
           textoHover = `<b>${categoria}</b><br>Soma: ${valorCalculado.toFixed(2)}`;
           
         } else if (calculoY.startsWith('media_')) {
           const nomeColunaNum = calculoY.replace('media_', '');
-          const valores = eventos.map(row => parseFloat(row[nomeColunaNum]) || 0);
+          const valores = eventos.map(row => 
+          parseFloat(row[nomeColunaNum]) || 0);
           valorCalculado = valores.reduce((s, v) => s + v, 0) / valores.length;
           textoHover = `<b>${categoria}</b><br>Média: ${valorCalculado.toFixed(2)}`;
         }
@@ -223,7 +402,8 @@
           hoverinfo: 'text+percent+label',
           type: 'pie'
         };
-        layout = { title: tituloGrafico };
+        // Para Pizza, os eixos X e Y são nulos
+        layout = { title: tituloGrafico, xaxis: null, yaxis: null }; 
         
       } else if (tipoGrafico === 'table') {
         trace = {
@@ -232,13 +412,14 @@
             values: [colunaX, calculoY.replace(/_/g, ' ')],
             align: "left",
             fill: { color: "var(--cor-primaria)" },
-            font: { color: "white", size: 12, weight: "bold" }
+           font: { color: "white", size: 12, weight: "bold" }
           },
           cells: {
             values: [labelsX, valoresY.map(v => typeof v === 'number' ? v.toFixed(2) : v)],
             align: "left",
             fill: { color: "var(--cor-fundo-card)" }
           }
+        
         };
         layout = { title: tituloGrafico };
         
@@ -259,9 +440,133 @@
       }
       
       Plotly.newPlot('graficoPlotly', [trace], layout);
+      
+      if (tipoGrafico !== 'table') {
+        globalLastChartData = {
+          traces: [trace], 
+          layout: layout,
+          id: `grafico-${new Date().getTime()}` 
+        };
+        btnAfixar.disabled = false; 
+      }
     }
 
-    // (Funções de UI 'mostrarPainelDeErro', 'mostrarConteudoPrincipal' - adaptadas)
+    // --- MUDANÇA 6: Novas Funções do Modal de Contexto ---
+    
+    function abrirModalContexto() {
+      if (!globalLastChartData) {
+        alert("Erro: Não há dados de gráfico para afixar.");
+        return;
+      }
+      
+      const layout = globalLastChartData.layout;
+      
+      // 1. Preencher os campos de texto com os dados atuais do gráfico
+      document.getElementById('input-contexto-titulo').value = layout.title || "";
+      
+      // Verifica se xaxis existe (Gráficos de Pizza não têm)
+      if (layout.xaxis) {
+        document.getElementById('input-contexto-eixox').value = layout.xaxis.title || "";
+        document.getElementById('input-contexto-eixox').disabled = false;
+      } else {
+        document.getElementById('input-contexto-eixox').value = "N/A (Gráfico de Pizza)";
+        document.getElementById('input-contexto-eixox').disabled = true;
+      }
+      
+      if (layout.yaxis) {
+        document.getElementById('input-contexto-eixoy').value = layout.yaxis.title || "";
+        document.getElementById('input-contexto-eixoy').disabled = false;
+      } else {
+        document.getElementById('input-contexto-eixoy').value = "N/A (Gráfico de Pizza)";
+        document.getElementById('input-contexto-eixoy').disabled = true;
+      }
+
+      // 2. Inicializar o editor Quill
+      if (!globalQuillContexto) {
+        globalQuillContexto = new Quill('#div-contexto-notas', quillContextoOptions);
+      }
+      globalQuillContexto.setContents([]); // Limpa o editor
+      
+      // 3. Mostrar o modal
+      document.getElementById('modal-contexto-overlay').style.display = 'flex';
+    }
+    
+    function fecharModalContexto() {
+      document.getElementById('modal-contexto-overlay').style.display = 'none';
+      // (Opcional) Destruir o Quill, mas por enquanto vamos apenas limpá-lo
+      if (globalQuillContexto) {
+        globalQuillContexto.setContents([]);
+      }
+      document.getElementById('loading-modal-salvar').style.display = 'none';
+      document.getElementById('btn-salvar-contexto').disabled = false;
+    }
+
+    function salvarContextoECompletarAfixar() {
+      if (!globalLastChartData) return;
+
+      const btnSalvar = document.getElementById('btn-salvar-contexto');
+      const loadingSalvar = document.getElementById('loading-modal-salvar');
+      
+      btnSalvar.disabled = true;
+      loadingSalvar.style.display = 'block';
+
+      // 1. Ler os novos títulos dos inputs
+      const novoTitulo = document.getElementById('input-contexto-titulo').value;
+      const novoEixoX = document.getElementById('input-contexto-eixox').value;
+      const novoEixoY = document.getElementById('input-contexto-eixoy').value;
+      
+      // 2. Ler as notas do Quill
+      const notasHtml = globalQuillContexto.root.innerHTML;
+      
+      // 3. Modificar o objeto de gráfico que vamos salvar
+      globalLastChartData.layout.title = novoTitulo;
+      if (globalLastChartData.layout.xaxis) {
+        globalLastChartData.layout.xaxis.title = novoEixoX;
+      }
+      if (globalLastChartData.layout.yaxis) {
+        globalLastChartData.layout.yaxis.title = novoEixoY;
+      }
+
+      // 4. Criar o "Bloco de Relatório" final, aqui no frontend
+      const blocoParaSalvar = {
+        tipo: "grafico",
+        id: globalLastChartData.id,
+        dadosGrafico: globalLastChartData, // O objeto Plotly com títulos atualizados
+        notas: notasHtml                // O HTML das notas
+      };
+
+      // 5. Enviar o Bloco completo para o backend
+      google.script.run
+        .withSuccessHandler(onAfixarSucesso)
+        .withFailureHandler(onAfixarErro)
+        .afixarGraficoAoGabinete(JSON.stringify(blocoParaSalvar)); // (Perfil.gs)
+    }
+
+
+    function onAfixarSucesso(mensagem) {
+      // Sucesso ao salvar no backend
+      fecharModalContexto();
+      
+      const btnAfixar = document.getElementById('btn-afixar');
+      const loadingAfixar = document.getElementById('afixar-loading');
+      
+      loadingAfixar.style.display = 'none';
+      btnAfixar.textContent = '✅ Afixado!';
+      btnAfixar.disabled = true; // Desativa até o próximo "Gerar Gráfico"
+    }
+
+    function onAfixarErro(erro) {
+      // Erro ao salvar no backend
+      const loadingSalvar = document.getElementById('loading-modal-salvar');
+      loadingSalvar.style.display = 'block';
+      loadingSalvar.textContent = `Erro: ${erro.message}`;
+      
+      document.getElementById('btn-salvar-contexto').disabled = false;
+    }
+    // --- FIM DA MUDANÇA 6 ---
+
+
+    // Funções de UI (sem alterações)
     function mostrarPainelDeErro(mensagem) {
       const splash = document.getElementById('splash-screen');
       const main = document.getElementById('main-container');
