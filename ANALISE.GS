@@ -1,18 +1,33 @@
 /**
  * =============================================================
- * MÓDULO 10: ANÁLISE DE TENDÊNCIA (MOTOR FASE B - MAPEAMENTO TOTAL)
+ * MÓDULO 10: ANÁLISE DE TENDÊNCIA (v2.1 - Correção de Sintaxe)
  * =============================================================
  */
+
+// Helper interno para garantir que um erro é sempre um objeto Error
+function _garantirErro(e_raw) {
+  if (e_raw instanceof Error) {
+    return e_raw;
+  }
+  return new Error(String(e_raw));
+}
+
 
 /**
  * FUNÇÃO 1: Abre o pop-up "Análise de Tendência"
  */
 function abrirModalAnaliseMedicamento() {
-  const html = HtmlService.createTemplateFromFile('AnaliseMedicamento')
-    .evaluate() 
-    .setWidth(1000)
-    .setHeight(800);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Configurar Análise de Intervenção');
+  try {
+    const html = HtmlService.createTemplateFromFile('AnaliseMedicamento')
+      .evaluate() 
+      .setWidth(1000)
+      .setHeight(800);
+    SpreadsheetApp.getUi().showModalDialog(html, 'Configurar Análise de Intervenção');
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
+    Logger.log("Erro em abrirModalAnaliseMedicamento: " + e.message + "\nStack: " + e.stack);
+    SpreadsheetApp.getUi().alert("Erro", "Não foi possível abrir o modal: " + e.message);
+  }
 }
 
 /**
@@ -26,7 +41,6 @@ function obterDadosParaSetupAnalise() {
       { nome: CONFIG.sheets.tabelaResumo, prefixo: "[Menu Principal]" },
       { nome: CONFIG.sheets.exames, prefixo: "[Exames]" }
     ];
-    
     let colunasMapeadas = [];
     const abasDisponiveis = [];
     
@@ -44,16 +58,15 @@ function obterDadosParaSetupAnalise() {
         });
       }
     });
-    
     // (Esta função deve existir no seu Utils.gs)
     const medicamentos = obterValoresUnicosDaAba_(CONFIG.sheets.prescricao, CONFIG.headers.medicamento);
-
     return {
       abas: abasDisponiveis, // Lista de abas que realmente existem
       colunas: colunasMapeadas, // Lista de objetos rotulados
       medicamentos: medicamentos // Lista de medicamentos da aba padrão
     };
-  } catch (e) {
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
     Logger.log("Erro em obterDadosParaSetupAnalise: " + e.message);
     return { erro: e.message };
   }
@@ -66,7 +79,8 @@ function obterValoresUnicosDaColuna(nomeAba, nomeColuna) {
   try {
     // (Esta função deve existir no seu Utils.gs)
     return obterValoresUnicosDaAba_(nomeAba, nomeColuna);
-  } catch (e) {
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
     return { erro: e.message };
   }
 }
@@ -86,8 +100,7 @@ function abrirModalGraficoInterativo(opcoes) {
     }
     
     const cache = CacheService.getScriptCache();
-    cache.put('opcoesGraficoPendente', JSON.stringify(opcoes), 300); 
-
+    cache.put('opcoesGraficoPendente', JSON.stringify(opcoes), 300);
     const html = HtmlService.createTemplateFromFile('GraficoInterativo.html')
       .evaluate()
       .setWidth(1200) 
@@ -95,9 +108,10 @@ function abrirModalGraficoInterativo(opcoes) {
     SpreadsheetApp.getUi().showModalDialog(html, `Laboratório de Eficácia`);
     
     return { sucesso: true };
-  } catch (e) {
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
     Logger.log("Erro em abrirModalGraficoInterativo: " + e.message);
-    throw new Error("Falha ao abrir o modal do gráfico: " + e.message);
+    throw e;
   }
 }
 
@@ -109,7 +123,6 @@ function abrirModalGraficoInterativo(opcoes) {
  */
 function buscarDadosParaGrafico() {
   Logger.log(`Iniciando 'buscarDadosParaGrafico (Motor Fase B)'...`);
-  
   let dadosInjetados = {};
   let opcoes, mapaFatos, mapaDimensoes;
   
@@ -125,12 +138,12 @@ function buscarDadosParaGrafico() {
     mapaDimensoes = opcoes.mapeamento.dimensoes;
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
     // --- 2. Carregar Dados Brutos ---
     const fatosSheet = ss.getSheetByName(mapaFatos.aba);
     if (!fatosSheet) throw new Error(`Aba de Fatos '${mapaFatos.aba}' não encontrada.`);
     const fatosData = fatosSheet.getDataRange().getValues();
-    const hFatos = fatosData.shift(); // Tira cabeçalho
+    const hFatos = fatosData.shift();
+    // Tira cabeçalho
 
     const dimensoesSheet = ss.getSheetByName(mapaDimensoes.aba);
     if (!dimensoesSheet) throw new Error(`Aba de Dimensões '${mapaDimensoes.aba}' não encontrada.`);
@@ -141,7 +154,6 @@ function buscarDadosParaGrafico() {
     if (!examesSheet) throw new Error(`Aba '${CONFIG.sheets.exames}' não encontrada.`);
     const examesData = examesSheet.getDataRange().getValues();
     const hExames = examesData.shift();
-    
     // --- 3. Carregar Mapas de Utilidade (Funções do Utils.gs) ---
     const dicionarioMap = buildDicionarioMap_();
     const weightMap = buildAndCacheWeightMap(false);
@@ -150,8 +162,10 @@ function buscarDadosParaGrafico() {
     const idxDim = {
       prontuario: hDimensoes.indexOf(mapaDimensoes.prontuario),
       dataNasc: hDimensoes.indexOf(mapaDimensoes.dataNasc),
-      sexo: mapaDimensoes.sexo ? hDimensoes.indexOf(mapaDimensoes.sexo) : -1,
-      gestacao: mapaDimensoes.gestacao ? hDimensoes.indexOf(mapaDimensoes.gestacao) : -1,
+      sexo: mapaDimensoes.sexo ?
+ hDimensoes.indexOf(mapaDimensoes.sexo) : -1,
+      gestacao: mapaDimensoes.gestacao ?
+ hDimensoes.indexOf(mapaDimensoes.gestacao) : -1,
       divisao: mapaDimensoes.divisao ? hDimensoes.indexOf(mapaDimensoes.divisao) : -1
     };
     if (idxDim.prontuario === -1 || idxDim.dataNasc === -1) {
@@ -227,7 +241,6 @@ function buscarDadosParaGrafico() {
     // --- 8. Encontrar "Dia 0" (Início da Intervenção) ---
     const pacientesAlvo = {};
     const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-    
     fatosData.forEach(row => {
       const prontuario = String(row[idxFatos.prontuario] || "").trim();
       const valorIntervencao = String(row[idxFatos.intervencao] || "").trim();
@@ -240,7 +253,6 @@ function buscarDadosParaGrafico() {
         }
       }
     });
-    
     const prontuariosValidos = Object.keys(pacientesAlvo);
     if (prontuariosValidos.length === 0) {
       throw new Error(`Nenhum paciente encontrado para a intervenção '${opcoes.medicamentoAlvo}' que também exista na aba '${mapaDimensoes.aba}'.`);
@@ -248,7 +260,6 @@ function buscarDadosParaGrafico() {
 
     // --- 9. Recolher dados brutos (Exames e Doses) ---
     const dadosBrutosParaGrafico = [];
-    
     // Loop 1: Recolher EXAMES
     examesData.forEach(row => {
       const prontuario = String(row[idxExames.prontuario] || "").trim();
@@ -273,12 +284,10 @@ function buscarDadosParaGrafico() {
           refMax: parseFloat(row[idxExames.refMax]),
           dataExameMs: dataExame.getTime() 
         };
-        
         // Adiciona dinamicamente os campos de dimensão (Sexo, Divisão, etc.)
         Object.keys(colunasDinamicas).forEach(key => {
           dataPoint[key] = patient[key];
         });
-        
         dadosBrutosParaGrafico.push(dataPoint);
       }
     });
@@ -310,7 +319,6 @@ function buscarDadosParaGrafico() {
         const patient = patientMap[prontuario];
         const dataIntervencao = pacientesAlvo[prontuario];
         const diasRelativos = Math.floor((dataDose.getTime() - dataIntervencao) / ONE_DAY_MS);
-        
         const dataPoint = {
           prontuario: prontuario,
           dataNascPacienteMs: patient.dataNasc ? patient.dataNasc.getTime() : null,
@@ -322,12 +330,10 @@ function buscarDadosParaGrafico() {
           refMax: null,
           dataExameMs: dataDose.getTime()
         };
-        
         // Adiciona dinamicamente os campos de dimensão (Sexo, Divisão, etc.)
         Object.keys(colunasDinamicas).forEach(key => {
           dataPoint[key] = patient[key];
         });
-        
         dadosBrutosParaGrafico.push(dataPoint);
       }
     });
@@ -346,8 +352,8 @@ function buscarDadosParaGrafico() {
       },
       rawData: dadosBrutosParaGrafico
     };
-    
-  } catch (e) {
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
     Logger.log("ERRO FATAL em buscarDadosParaGrafico: " + e.message + "\nStack: " + e.stack);
     dadosInjetados = {
       sucesso: false,
@@ -388,9 +394,10 @@ function exportarDadosParaPlanilha(dadosAgregados) {
 
     folha.activate();
     return { sucesso: true, nomeFolha: nomeFolha };
-  } catch (e) {
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
     Logger.log("Erro ao exportar dados: " + e.message);
-    throw new Error("Falha na exportação: " + e.message);
+    throw e;
   }
 }
 
@@ -408,7 +415,6 @@ function exportarDadosParaPlanilha(dadosAgregados) {
  */
 function executarTesteTMultiCoorte(arraysParaTestar) {
   const resultadosFinais = [];
-
   arraysParaTestar.forEach(coorte => {
     try {
       const arrayAntes = coorte.antes;
@@ -443,8 +449,8 @@ function executarTesteTMultiCoorte(arraysParaTestar) {
         mediaDepois: statsDepois.media,
         nDepois: statsDepois.n
       });
-
-    } catch (e) {
+    } catch (e_raw) {
+      const e = _garantirErro(e_raw);
       Logger.log(`Erro no Teste T para ${coorte.nome}: ${e.message}`);
       resultadosFinais.push({
         nome: coorte.nome,
@@ -466,7 +472,6 @@ function calcularPValor_(stats1, stats2) {
   const m2 = stats2.media;
   const v1 = stats1.variancia;
   const v2 = stats2.variancia;
-  
   if (v1 === null || v2 === null) throw new Error("Variância nula recebida.");
   if (v1 === 0 && v2 === 0 && m1 === m2) {
     return { p: 1, t: 0, df: n1 + n2 - 2 }; // Sem variância, médias iguais
@@ -507,7 +512,7 @@ function gammaln(x) {
 
 function betainc(x, a, b) {
   const bt = (x === 0 || x === 1) ?
-  0 : Math.exp(gammaln(a + b) - gammaln(a) - gammaln(b) + a * Math.log(x) + b * Math.log(1 - x));
+ 0 : Math.exp(gammaln(a + b) - gammaln(a) - gammaln(b) + a * Math.log(x) + b * Math.log(1 - x));
   if (x < (a + 1) / (a + b + 2)) {
     return bt * betacf(x, a, b) / a;
   }
@@ -554,3 +559,43 @@ function tDist2T(t, df) {
   const p = betainc(x, df / 2, 0.5);
   return p;
 }
+
+// --- CORREÇÃO: Removida a chave '}' extra que estava aqui ---
+
+
+/**
+ * =============================================================
+ * (NOVA) FUNÇÃO PARA AFIXAR (do Lab Temporal)
+ * =============================================================
+ */
+function afixarGraficoDoLabTemporal(blocoGraficoString) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const CHAVE_ESTRUTURA = 'gabineteEstrutura'; // A chave partilhada com o Gabinete.gs
+    
+    // 1. Obter a lista de blocos existente
+    const estruturaSalvaString = props.getProperty(CHAVE_ESTRUTURA);
+    let estruturaSalva = [];
+    if (estruturaSalvaString) {
+      estruturaSalva = JSON.parse(estruturaSalvaString);
+    }
+
+    // 2. Adicionar o novo bloco (que já vem 100% formatado do frontend)
+    const novoBloco = JSON.parse(blocoGraficoString);
+    
+    // 3. Adicionar o novo bloco à lista
+    estruturaSalva.push(novoBloco);
+
+    // 4. Salvar a lista atualizada
+    props.setProperty(CHAVE_ESTRUTURA, JSON.stringify(estruturaSalva));
+    
+    Logger.log(`Bloco de Gráfico ${novoBloco.id} afixado com sucesso. Total no gabinete: ${estruturaSalva.length}`);
+    return "Gráfico afixado com sucesso!";
+
+  } catch (e_raw) {
+    const e = _garantirErro(e_raw);
+    Logger.log("ERRO FATAL em afixarGraficoDoLabTemporal: " + e.message + "\nStack: " + e.stack);
+    throw e;
+  }
+}
+
