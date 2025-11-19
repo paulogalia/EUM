@@ -18,7 +18,8 @@ dataNascimento: "DATA_NASCIMENTO",
     gestacao: "IDADE GESTACIONAL",
     sexo: "SEXO",
     
-    // Aba 'FARMACOVIGILÂNCIA'
+  
+  // Aba 'FARMACOVIGILÂNCIA'
     ramTipo: "RAM",
     ramData: "DATA_RAM",
     ramGravidade: "GRAVIDADE",
@@ -32,7 +33,8 @@ dataFim: "DATA_FIM",
     medicamento: "MEDICAMENTO",
     codigoMedicamento: "CODIGO_MED",     // <-- FASE 2: Novo
     dosePrescrita: "DOSE_PRESCRITA",     // <-- FASE 2: Novo (ex: 5)
-    unidadePrescrita: "UN_PRESCRITA",   // <-- FASE 2: Novo (ex: "ML")
+    unidadePrescrita: "UN_PRESCRITA", 
+  // <-- FASE 2: Novo (ex: "ML")
     // 'doseAdministrada_mg' e 'colTaxaResultante' removidos
     
     // Aba 'Registro de Peso'
@@ -53,7 +55,8 @@ exameRefNome: "NOME_EXAME",
     exameRefMinDias: "IDADE_MIN_DIAS",
     exameRefMaxDias: "IDADE_MAX_DIAS",
     exameRefMinValor: "VALOR_MIN",
-    exameRefMaxValor: "VALOR_MAX",
+   
+ exameRefMaxValor: "VALOR_MAX",
 
     // (NOVO) Aba 'DICIONÁRIO_MEDICAMENTOS' (Fase 1)
     dicCodigoMed: "CODIGO_MED",
@@ -80,7 +83,7 @@ const MASTER_DB_SHEET_ID = "1zKqYVR9seTPy3eyX5CR2xuXZtqSwwvERQn_KX3GK5JM";
  */
 function onOpen(e) {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('🔬 Análise EUM')
+ui.createMenu('🔬 Análise EUM')
     
     // 1. O WIZARD DE SETUP INICIAL
     .addItem('🚀 Iniciar/Configurar Novo EUM', 'abrirWizardBoasVindas')
@@ -88,13 +91,20 @@ function onOpen(e) {
 
     // 2. O NOVO "BLOCO" DE ANÁLISE CENTRAL
     .addItem('📈 Iniciar Análise (Mapeamento Total)', 'abrirModalAnaliseMedicamento')
+    
+    // --- NOVO ITEM DE MENU ---
+    .addItem('📑 Abrir Gabinete de Análise', 'abrirModalGabinete') 
+    // (Esta função virá do novo ficheiro Gabinete.gs)
+    // --- FIM DA MODIFICAÇÃO ---
+
     .addSeparator()
 
     // 3. FERRAMENTAS DE PRÉ-PROCESSAMENTO E LINHA
     .addSubMenu(ui.createMenu('🛠️ Ferramentas Auxiliares')
         .addItem('👤 Ver Perfil do Paciente', 'abrirSidebarAnalise')
         .addItem('🧪 Processar Análise de Exames', 'processarAnaliseExames')
-        .addItem('🛡️ Avaliar Causalidade (Naranjo)', 'abrirSidebarAvaliacao_UI')
+      
+  .addItem('🛡️ Avaliar Causalidade (Naranjo)', 'abrirSidebarAvaliacao_UI')
      )
     
     // 4. (OPCIONAL) Manter relatórios antigos que não dependem do mapeamento
@@ -126,7 +136,7 @@ function abrirSidebarAnalise() {
       .evaluate() // <-- CORREÇÃO
       .setWidth(700)
       .setHeight(650);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Perfil do Paciente');
+SpreadsheetApp.getUi().showModalDialog(html, 'Perfil do Paciente');
 }
 
 // --- MÓDULO 3 & 4: PROCESSADOR EM LOTE ---
@@ -143,23 +153,21 @@ function abrirModalRelatorioBuilder() {
     .evaluate() // <-- CORREÇÃO
     .setWidth(550)
     .setHeight(450);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Construtor de Relatório');
+SpreadsheetApp.getUi().showModalDialog(html, 'Construtor de Relatório');
 }
 
 function gerarRelatorioModular(modulosSelecionados) {
   const ui = SpreadsheetApp.getUi();
 const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
 const nomeRelatorio = "Relatório Modular";
   let reportSheet = ss.getSheetByName(nomeRelatorio);
   if (reportSheet) {
     reportSheet.clear();
-  } else {
+} else {
     reportSheet = ss.insertSheet(nomeRelatorio);
 }
   ss.setActiveSheet(reportSheet);
-  
-  reportSheet.getRange("B1").setValue("Relatório Modular Gerado em: " + new Date().toLocaleString())
+reportSheet.getRange("B1").setValue("Relatório Modular Gerado em: " + new Date().toLocaleString())
       .setFontWeight("bold").setFontSize(14);
 const tabelaSheet = ss.getSheetByName(CONFIG.sheets.tabelaResumo);
 if (!tabelaSheet) {
@@ -170,7 +178,7 @@ if (!tabelaSheet) {
   const tabelaHeaders = tabelaData.shift();
 
 const idxProntuario = tabelaHeaders.indexOf(CONFIG.headers.prontuario);
-  if (idxProntuario === -1) {
+if (idxProntuario === -1) {
     throw new Error("Coluna '" + CONFIG.headers.prontuario + "' não encontrada na aba 'Tabela'. O relatório não pode continuar.");
 }
 
@@ -178,8 +186,7 @@ const idxProntuario = tabelaHeaders.indexOf(CONFIG.headers.prontuario);
 const chartWidth = 550;
   const chartHeight = 300;
   let erros = [];
-
-  // --- MÓDULO: Contagem por Sexo ---
+// --- MÓDULO: Contagem por Sexo ---
   if (modulosSelecionados.includes("contagemSexo")) {
     Logger.log("Tentando gerar 'contagemSexo'...");
 const idxSexo = tabelaHeaders.indexOf(CONFIG.headers.sexo);
@@ -223,7 +230,8 @@ tabelaData.forEach(row => {
 if (gestacaoStr.includes("prematuro")) classificacao = "Prematuro";
          else if (gestacaoStr.includes("termo")) classificacao = "A Termo";
          
-         contagem[classificacao] = (contagem[classificacao] || 0) + 1;
+   
+      contagem[classificacao] = (contagem[classificacao] || 0) + 1;
        });
 const dadosGrafico = [["Classificação", "Contagem"]];
        Object.keys(contagem).forEach(key => dadosGrafico.push([key, contagem[key]]));
@@ -254,7 +262,8 @@ tabelaData.forEach(row => {
  if (isNaN(custo)) return;
           
           if (!agregador[sexo]) agregador[sexo] = { soma: 0, n: 0 };
-          agregador[sexo].soma += custo;
+ 
+         agregador[sexo].soma += custo;
           agregador[sexo].n++;
        });
 const dadosGrafico = [["Sexo", "Custo Médio (R$)"]];
@@ -288,9 +297,10 @@ function testarPermissaoBancoMestre() {
     Logger.log("Tentando conectar ao Banco de Dados Mestre...");
 const db = SpreadsheetApp.openById(MASTER_DB_SHEET_ID);
 Logger.log("Conectado com sucesso: " + db.getName());
-    SpreadsheetApp.getUi().alert("Sucesso!", "Permissão concedida para acessar o Banco de Dados Mestre.", SpreadsheetApp.getUi().ButtonSet.OK);
+SpreadsheetApp.getUi().alert("Sucesso!", "Permissão concedida para acessar o Banco de Dados Mestre.", SpreadsheetApp.getUi().ButtonSet.OK);
 } catch (e) {
     Logger.log("Erro ao testar permissão: " + e.message);
     SpreadsheetApp.getUi().alert("Erro no Teste", e.message, SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
+
