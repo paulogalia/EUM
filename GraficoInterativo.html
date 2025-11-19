@@ -5,7 +5,9 @@
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
   <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
-
+  
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
   <?!= HtmlService.createHtmlOutputFromFile('Estilos').getContent(); ?>
   
   <style>
@@ -24,6 +26,122 @@
     .filtro-dinamico-group select {
       margin-top: 5px;
     }
+    
+    /* === MUDANÇA 2: Estilos para o Modal de Contexto === */
+    .modal-overlay {
+      display: none; /* Começa escondido */
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-content {
+      background-color: var(--cor-fundo-app); /* Fundo cinza */
+      width: 90%;
+      max-width: 700px;
+      border-radius: var(--border-radius);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--cor-borda);
+    }
+    .modal-header h4 {
+      margin: 0;
+      color: var(--cor-texto-titulo);
+      font-size: 1.3em;
+    }
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .modal-body .form-group {
+      margin-bottom: 15px;
+    }
+    .modal-body .form-group label {
+      font-weight: bold;
+      font-size: 0.9em;
+      margin-bottom: 5px;
+      display: block;
+    }
+    
+    /* Estilos do Editor Quill DENTRO do modal */
+    #div-contexto-notas {
+      min-height: 120px;
+    }
+    .ql-toolbar.ql-snow {
+      border: 1px solid var(--cor-borda);
+      border-top-left-radius: 6px;
+      border-top-right-radius: 6px;
+      background-color: #fff;
+    }
+    .ql-container.ql-snow {
+      border: 1px solid var(--cor-borda);
+      border-bottom-left-radius: 6px;
+      border-bottom-right-radius: 6px;
+      background-color: #fff;
+    }
+    .ql-editor {
+      min-height: 120px;
+      font-size: 1em;
+    }
+    
+    /* (NOVO) Estilo para a caixa de Resultados Estatísticos */
+    #contexto-resultados-estatisticos {
+      background-color: #f4f4f4;
+      border: 1px solid var(--cor-borda);
+      border-radius: 4px;
+      padding: 10px 15px;
+      font-family: monospace;
+      font-size: 0.9em;
+      color: #333;
+      white-space: pre-wrap; /* Mantém as quebras de linha */
+    }
+    /* === FIM DA MUDANÇA 2 === */
+    
+    /* Botão Afixar (copiado do PerfilDeUso) */
+    button.action-afixar {
+      font-size: 1em; 
+      font-weight: bold;
+      background-color: #fff;
+      border: 2px solid #00573D; /* Verde escuro */
+      color: #00573D;
+      padding: 12px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button.action-afixar:hover {
+      background-color: #f0f5f3;
+    }
+    button.action-afixar:disabled {
+      background-color: #eee;
+      border-color: #aaa;
+      color: #aaa;
+      cursor: not-allowed;
+    }
+    #afixar-loading {
+      display: none;
+      text-align: center;
+      font-size: 0.9em;
+      margin-top: 8px;
+    }
+
   </style>
 </head>
 <body>
@@ -137,9 +255,14 @@
         <div id="testeT-loading">A calcular...</div>
       </div>
       <br>
-      <div class="button-row">
+      
+      <div class="button-row" style="gap: 10px;">
         <button class="action" onclick="desenharGraficoRouter()">🔄 Atualizar Gráfico</button>
+        <button class="action-afixar" id="btn-afixar" onclick="abrirModalContexto()" disabled>
+          📌 Afixar ao Relatório
+        </button>
       </div>
+      <div id="afixar-loading">A afixar...</div>
       <button class="export" id="btn-exportar" onclick="iniciarExportacao()">📥 Exportar Dados</button>
       <div id="export-loading">A exportar...</div>
     </div>
@@ -157,6 +280,59 @@
   </div>
 
 
+  <div class="modal-overlay" id="modal-contexto-overlay">
+    <div class="modal-content">
+      
+      <div class="modal-header">
+        <h4>Contextualizar e Afixar Bloco</h4>
+      </div>
+      
+      <div class="modal-body">
+        
+        <div class="form-group">
+          <label for="input-contexto-titulo">Título do Gráfico:</label>
+          <input type="text" id="input-contexto-titulo">
+        </div>
+        
+        <div class_ ="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div>
+            <label for="input-contexto-eixox">Título Eixo X:</label>
+            <input type="text" id="input-contexto-eixox">
+          </div>
+          <div>
+            <label for="input-contexto-eixoy">Título Eixo Y (Primário):</label>
+            <input type="text" id="input-contexto-eixoy">
+          </div>
+        </div>
+        
+        <div class="form-group" style="margin-top: 20px;">
+          <label>Resultados-Chave (Automático):</label>
+          <div id="contexto-resultados-estatisticos">
+            Nenhuma análise estatística executada.
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 20px;">
+          <label>Anotação / Interpretação (Opcional):</label>
+          <div id="div-contexto-notas"></div> 
+        </div>
+
+      </div>
+      
+      <div class="modal-footer" style="padding: 20px 24px; border-top: 1px solid var(--cor-borda); background-color: #fff; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <button class="secondary" onclick="fecharModalContexto()" style="width: auto; padding: 10px 20px; border-width: 2px;">Cancelar</button>
+          
+          <div id="loading-modal-salvar" style="display: none; font-size: 0.9em;">A salvar...</div>
+
+          <button class="action" id="btn-salvar-contexto" onclick="salvarContextoECompletarAfixar()" style="width: auto; padding: 12px 28px;">
+            Salvar no Gabinete
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
   <script>
     // 1. Variáveis Globais
     let globalRawData;
@@ -166,16 +342,31 @@
     let maxAge = 0; 
     const ONE_DAY_MS_JS = 1000 * 60 * 60 * 24;
     let globalDadosAgregadosParaExportar = [];
-    
-    // **** NOVO: Armazena os filtros dinâmicos ****
     let colunasFiltroDinamico = [];
+
+    // --- MUDANÇA 5: Novas Variáveis Globais ---
+    let globalLastChartData = null; // Armazena dados do Plotly
+    let globalLastTestResult = null; // Armazena resultados do Teste-T
+    let globalQuillContexto = null; // Instância do editor
+    const quillContextoOptions = {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }]
+        ]
+      },
+      placeholder: 'Escreva a sua principal conclusão ou análise aqui...'
+    };
+    // --- FIM DA MUDANÇA 5 ---
+
 
     window.addEventListener('load', iniciarGrafico);
 
     function iniciarGrafico() {
       console.log("Página 100% carregada. A pedir dados ao backend...");
-      if (typeof Plotly === 'undefined' || typeof noUiSlider === 'undefined') {
-        mostrarPainelDeErro("Falha ao carregar bibliotecas externas (Plotly ou noUiSlider).");
+      if (typeof Plotly === 'undefined' || typeof noUiSlider === 'undefined' || typeof Quill === 'undefined') {
+        mostrarPainelDeErro("Falha ao carregar bibliotecas externas (Plotly, noUiSlider ou Quill).");
         return;
       }
       google.script.run
@@ -211,6 +402,8 @@
       }
     }
     
+    // (Funções de UI e helpers de dados... mostrarPainelDeErro, mostrarConteudoPrincipal, voltarParaConfiguracao, calcularEstatisticas, filtrarDadosGlobais, getNomeCoorte...)
+    // (Estas permanecem iguais à v3.5, não precisam ser coladas de novo)
     function mostrarPainelDeErro(mensagem) {
       const splash = document.getElementById('splash-screen');
       const main = document.getElementById('main-container');
@@ -251,7 +444,6 @@
         })
         .abrirModalAnaliseMedicamento(); 
     }
-    
     function calcularEstatisticas(arr) {
       if (!arr || arr.length === 0) return { media: null, n: 0, stdDev: null };
       const n = arr.length;
@@ -262,11 +454,6 @@
       const stdDev = Math.sqrt(variancia);
       return { media: media, n: n, stdDev: stdDev };
     }
-
-    /**
-     * **** ATUALIZADO (FASE B) ****
-     * FILTRA OS DADOS BRUTOS com base em todos os controlos, incluindo os dinâmicos
-     */
     function filtrarDadosGlobais(forcarExames = false) {
       // 1. Filtro de Exames (checkboxes)
       let examesSelecionados = Array.from(document.querySelectorAll('#exames-checkbox-group input:checked')).map(cb => cb.value);
@@ -314,22 +501,6 @@
         return true;
       });
     }
-    
-    function desenharGraficoRouter() {
-      if (!globalRawData) return; 
-      const tipoGrafico = document.getElementById('control-tipografico').value;
-      globalDadosAgregadosParaExportar = [];
-      if (tipoGrafico === 'proporcao') {
-        desenharGraficoProporcao();
-      } else {
-        desenharGraficoMediaIndividual();
-      }
-    }
-
-    /**
-     * **** ATUALIZADO (FASE B) ****
-     * Esta função agora cria a "coorte" com base na sub-divisão
-     */
     function getNomeCoorte(row, subDivisao) {
       if (subDivisao === "nenhuma") {
         return "Total";
@@ -338,7 +509,43 @@
       return row[subDivisao] || "N/D";
     }
     
-    
+
+    /**
+     * Roteador de Gráficos (Atualizado)
+     */
+    function desenharGraficoRouter() {
+      // Limpa os dados antigos
+      globalLastChartData = null;
+      globalLastTestResult = null;
+      document.getElementById('btn-afixar').disabled = true;
+
+      if (!globalRawData) return; 
+      const tipoGrafico = document.getElementById('control-tipografico').value;
+      globalDadosAgregadosParaExportar = [];
+      
+      let layout;
+      let traces;
+      
+      if (tipoGrafico === 'proporcao') {
+        const { traces: t, layout: l } = desenharGraficoProporcao();
+        traces = t;
+        layout = l;
+      } else {
+        const { traces: t, layout: l } = desenharGraficoMediaIndividual();
+        traces = t;
+        layout = l;
+      }
+      
+      // Salva o gráfico gerado
+      globalLastChartData = {
+        traces: traces,
+        layout: layout,
+        id: `grafico-temporal-${new Date().getTime()}`
+      };
+      // Ativa o botão para afixar
+      document.getElementById('btn-afixar').disabled = false;
+    }
+
     /**
      * Desenha o gráfico de Proporção (barras empilhadas)
      */
@@ -375,7 +582,7 @@
         else bucketsAgrupados[row.nomeExame][coorte][bucketId].Outro++;
       });
 
-      globalPlotlyTraces = [];
+      let globalPlotlyTraces = [];
       const exames = Object.keys(bucketsAgrupados);
       exames.forEach(nomeExame => {
         const dadosDoExame = bucketsAgrupados[nomeExame];
@@ -412,7 +619,7 @@
           globalPlotlyTraces.push(traceAbaixo, traceNormal, traceAcima);
         });
       });
-      globalPlotlyLayout = {
+      let globalPlotlyLayout = {
         title: { text: tituloGrafico, y: 0.95, x: 0.5, xanchor: 'center', yanchor: 'top' },
         xaxis: { title: tituloX },
         yaxis: { title: tituloY, range: [0, 100] },
@@ -422,6 +629,7 @@
         annotations: [{ x: 0, y: 0.95, xref: 'x', yref: 'paper', text: 'Dia 0 = Início da Intervenção', showarrow: true, arrowhead: 4, ax: 0, ay: -40, font: { color: 'var(--cor-vermelho-intervencao)', size: 12, style: 'italic' }, bordercolor: '#c7c7c7', borderwidth: 1, bgcolor: 'rgba(255,255,255,0.8)' }]
       };
       Plotly.newPlot('graficoPlotly', globalPlotlyTraces, globalPlotlyLayout);
+      return { traces: globalPlotlyTraces, layout: globalPlotlyLayout };
     }
 
 
@@ -467,7 +675,7 @@
         bucketsAgrupados[row.nomeExame][coorte][bucketId].push(row);
       });
 
-      globalPlotlyTraces = [];
+      let globalPlotlyTraces = [];
       const exames = Object.keys(bucketsAgrupados);
       exames.forEach(nomeExame => {
         const dadosDoExame = bucketsAgrupados[nomeExame];
@@ -541,7 +749,7 @@
         });
       });
       const nomeEixoY2 = (exameY2 === 'dose_intervenção') ? "Dose (mg/kg)" : (exameY2 === 'nenhum' ? '' : exameY2);
-      globalPlotlyLayout = {
+      let globalPlotlyLayout = {
         title: { text: tituloGrafico, y: 0.95, x: 0.5, xanchor: 'center', yanchor: 'top' },
         xaxis: { title: tituloX, domain: [0, (exameY2 !== 'nenhum' ? 0.95 : 1.0)] },
         yaxis: { title: tituloY }, 
@@ -552,16 +760,16 @@
         annotations: [{ x: 0, y: 0.95, xref: 'x', yref: 'paper', text: 'Dia 0 = Início da Intervenção', showarrow: true, arrowhead: 4, ax: 0, ay: -40, font: { color: 'var(--cor-vermelho-intervencao)', size: 12, style: 'italic' }, bordercolor: '#c7c7c7', borderwidth: 1, bgcolor: 'rgba(255,255,255,0.8)' }]
       };
       Plotly.newPlot('graficoPlotly', globalPlotlyTraces, globalPlotlyLayout);
+      return { traces: globalPlotlyTraces, layout: globalPlotlyLayout };
     }
     
     /**
-     * **** ATUALIZADO (FASE B) ****
-     * Função de Setup: Chamada uma vez ao carregar
+     * Função de Setup
      */
     function setupPainelDeControlo() {
       if (!globalRawData) return; 
 
-      // 1. Popula Filtros Dinâmicos (NOVO)
+      // 1. Popula Filtros Dinâmicos
       const filtroContainer = document.getElementById('filtros-dinamicos-container');
       const subdivisaoSelect = document.getElementById('control-divisaomedia');
       filtroContainer.innerHTML = '';
@@ -570,10 +778,8 @@
       colunasFiltroDinamico.forEach(nomeColuna => {
         const valoresUnicos = [...new Set(globalRawData.map(row => row[nomeColuna]))].sort();
         
-        // Adiciona a coluna como uma opção de SUB-DIVISÃO
         subdivisaoSelect.innerHTML += `<option value="${nomeColuna}">${nomeColuna}</option>`;
         
-        // Cria um FILTRO dropdown para esta coluna
         let filtroHtml = `
           <div class="filtro-dinamico-group">
             <label for="filtro-dinamico-${nomeColuna}">Filtrar por ${nomeColuna}:</label>
@@ -636,7 +842,7 @@
       desenharGraficoRouter();
     }
     
-    // (O restante do JS - handleDoseToggle, atualizarDropdownY2, Exportação, Teste T - permanece o mesmo)
+    // (O restante do JS - handleDoseToggle, atualizarDropdownY2, Exportação - permanece o mesmo)
     
     function handleDoseToggle() {
       atualizarDropdownY2();
@@ -702,11 +908,18 @@
                         .map(s => Number(s))
                         .filter(n => !isNaN(n));
     }
+    
+
+    /**
+     * --- MUDANÇA 6: Funções do Teste-T atualizadas ---
+     */
     function iniciarTesteT() {
       const btn = document.getElementById('btn-testeT');
       const loading = document.getElementById('testeT-loading');
       btn.disabled = true;
       loading.style.display = 'block';
+      globalLastTestResult = null; // Limpa o resultado anterior
+      
       try {
         const examesSelecionados = Array.from(document.querySelectorAll('#exames-checkbox-group input:checked'));
         if (examesSelecionados.length !== 1) {
@@ -767,11 +980,13 @@
         onTesteTErro(e); 
       }
     }
+    
     function onTesteTSucesso(resultados) {
       const btn = document.getElementById('btn-testeT');
       const loading = document.getElementById('testeT-loading');
       btn.disabled = false;
       loading.style.display = 'none';
+      
       let mensagem = "--- Resultado do Teste T ---\n\n";
       resultados.forEach(resultado => {
         if (resultado.erro) {
@@ -783,15 +998,146 @@
                       `Média 'Depois': ${resultado.mediaDepois.toFixed(2)} (n=${resultado.nDepois})\n\n`;
         }
       });
-      alert(mensagem);
+      
+      // Salva o texto do resultado para o modal
+      globalLastTestResult = mensagem; 
+      alert(mensagem); // Continua a mostrar o alert para feedback imediato
     }
+    
     function onTesteTErro(erro) {
       const btn = document.getElementById('btn-testeT');
       const loading = document.getElementById('testeT-loading');
       btn.disabled = false;
       loading.style.display = 'none';
+      globalLastTestResult = `Falha no Teste T: ${erro.message}`; // Salva o erro
       alert("Falha no Teste T: " + erro.message);
     }
+    
+    
+    // --- MUDANÇA 7: Funções do Modal de Contexto (adaptadas) ---
+    
+    function abrirModalContexto() {
+      if (!globalLastChartData) {
+        alert("Erro: Não há dados de gráfico para afixar.");
+        return;
+      }
+      
+      const layout = globalLastChartData.layout;
+      
+      // 1. Preencher os campos de texto com os dados atuais do gráfico
+      document.getElementById('input-contexto-titulo').value = layout.title.text || layout.title || "";
+      
+      if (layout.xaxis) {
+        document.getElementById('input-contexto-eixox').value = layout.xaxis.title || "";
+        document.getElementById('input-contexto-eixox').disabled = false;
+      } else {
+        document.getElementById('input-contexto-eixox').value = "N/A (Gráfico de Pizza)";
+        document.getElementById('input-contexto-eixox').disabled = true;
+      }
+      
+      if (layout.yaxis) {
+        document.getElementById('input-contexto-eixoy').value = layout.yaxis.title || "";
+        document.getElementById('input-contexto-eixoy').disabled = false;
+      } else {
+        document.getElementById('input-contexto-eixoy').value = "N/A (Gráfico de Pizza)";
+        document.getElementById('input-contexto-eixoy').disabled = true;
+      }
+
+      // 2. (NOVO) Preencher a caixa de resultados estatísticos
+      const resultadosDiv = document.getElementById('contexto-resultados-estatisticos');
+      if (globalLastTestResult) {
+        resultadosDiv.textContent = globalLastTestResult;
+      } else {
+        resultadosDiv.textContent = "Nenhuma análise estatística executada para este gráfico.";
+      }
+
+      // 3. Inicializar o editor Quill
+      if (!globalQuillContexto) {
+        globalQuillContexto = new Quill('#div-contexto-notas', quillContextoOptions);
+      }
+      globalQuillContexto.setContents([]); // Limpa o editor
+      
+      // 4. Mostrar o modal
+      document.getElementById('modal-contexto-overlay').style.display = 'flex';
+    }
+    
+    function fecharModalContexto() {
+      document.getElementById('modal-contexto-overlay').style.display = 'none';
+      if (globalQuillContexto) {
+        globalQuillContexto.setContents([]);
+      }
+      document.getElementById('loading-modal-salvar').style.display = 'none';
+      document.getElementById('btn-salvar-contexto').disabled = false;
+    }
+
+    function salvarContextoECompletarAfixar() {
+      if (!globalLastChartData) return;
+
+      const btnSalvar = document.getElementById('btn-salvar-contexto');
+      const loadingSalvar = document.getElementById('loading-modal-salvar');
+      
+      btnSalvar.disabled = true;
+      loadingSalvar.style.display = 'block';
+
+      // 1. Ler os novos títulos
+      const novoTitulo = document.getElementById('input-contexto-titulo').value;
+      const novoEixoX = document.getElementById('input-contexto-eixox').value;
+      const novoEixoY = document.getElementById('input-contexto-eixoy').value;
+      
+      // 2. Ler as notas do Quill e os resultados estatísticos
+      const notasHtml = globalQuillContexto.root.innerHTML;
+      const resultadosTexto = document.getElementById('contexto-resultados-estatisticos').textContent;
+      
+      // 3. Combina as notas e os resultados
+      // (Vamos adicionar os resultados estatísticos no topo das notas)
+      const notasCompletas = `
+        <h3>Resultados-Chave</h3>
+        <p><code>${resultadosTexto.replace(/\n/g, '<br>')}</code></p>
+        <hr>
+        <h3>Interpretação</h3>
+        ${notasHtml}
+      `;
+
+      // 4. Modificar o objeto de gráfico que vamos salvar
+      globalLastChartData.layout.title = novoTitulo;
+      if (globalLastChartData.layout.xaxis) {
+        globalLastChartData.layout.xaxis.title = novoEixoX;
+      }
+      if (globalLastChartData.layout.yaxis) {
+        globalLastChartData.layout.yaxis.title = novoEixoY;
+      }
+
+      // 5. Criar o "Bloco de Relatório" final
+      const blocoParaSalvar = {
+        tipo: "grafico",
+        id: globalLastChartData.id,
+        dadosGrafico: globalLastChartData, 
+        notas: notasCompletas // Salva as notas E os resultados
+      };
+
+      // 6. Enviar o Bloco completo para o backend
+      google.script.run
+        .withSuccessHandler(onAfixarSucesso)
+        .withFailureHandler(onAfixarErro)
+        .afixarGraficoDoLabTemporal(JSON.stringify(blocoParaSalvar)); // (ANALISE.GS)
+    }
+
+
+    function onAfixarSucesso(mensagem) {
+      fecharModalContexto();
+      const btnAfixar = document.getElementById('btn-afixar');
+      btnAfixar.textContent = '✅ Afixado!';
+      btnAfixar.disabled = true; 
+    }
+
+    function onAfixarErro(erro) {
+      const loadingSalvar = document.getElementById('loading-modal-salvar');
+      loadingSalvar.style.display = 'block';
+      loadingSalvar.textContent = `Erro: ${erro.message}`;
+      document.getElementById('btn-salvar-contexto').disabled = false;
+    }
+    // --- FIM DA MUDANÇA 7 ---
+
   </script>
 </body>
 </html>
