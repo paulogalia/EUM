@@ -1,6 +1,6 @@
 /**
  * =============================================================
- * MÓDULO 11: LABORATÓRIO DE PERFIL DE USO (CATEGÓRICO)
+ * MÓDULO 11: LABORATÓRIO DE PERFIL DE USO (v2.0 - Ponte Completa)
  * (O "Construtor X por Y" que substitui Protocolo e Custo)
  * =============================================================
  */
@@ -34,7 +34,6 @@ function abrirModalPerfilDeUso(opcoes) {
  */
 function buscarDadosParaPerfilDeUso() {
   Logger.log(`Iniciando 'buscarDadosParaPerfilDeUso (Motor X por Y)'...`);
-  
   let dadosInjetados = {};
   let opcoes, mapaFatos, mapaDimensoes;
   
@@ -50,24 +49,27 @@ function buscarDadosParaPerfilDeUso() {
     mapaDimensoes = opcoes.mapeamento.dimensoes;
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
     // --- 2. Carregar Dados Brutos (Fatos e Dimensões) ---
     const fatosSheet = ss.getSheetByName(mapaFatos.aba);
     if (!fatosSheet) throw new Error(`Aba de Fatos '${mapaFatos.aba}' não encontrada.`);
     const fatosData = fatosSheet.getDataRange().getValues();
-    const hFatos = fatosData.shift(); // Cabeçalhos dos Fatos
+    const hFatos = fatosData.shift();
+    // Cabeçalhos dos Fatos
 
     const dimensoesSheet = ss.getSheetByName(mapaDimensoes.aba);
     if (!dimensoesSheet) throw new Error(`Aba de Dimensões '${mapaDimensoes.aba}' não encontrada.`);
     const dimensoesData = dimensoesSheet.getDataRange().getValues();
-    const hDimensoes = dimensoesData.shift(); // Cabeçalhos das Dimensões
+    const hDimensoes = dimensoesData.shift();
+    // Cabeçalhos das Dimensões
     
     // --- 3. Encontrar Índices Mapeados (Dimensões) ---
     const idxDim = {
       prontuario: hDimensoes.indexOf(mapaDimensoes.prontuario),
       // Adiciona todos os campos opcionais que queremos "juntar"
-      sexo: mapaDimensoes.sexo ? hDimensoes.indexOf(mapaDimensoes.sexo) : -1,
-      gestacao: mapaDimensoes.gestacao ? hDimensoes.indexOf(mapaDimensoes.gestacao) : -1,
+      sexo: mapaDimensoes.sexo ?
+ hDimensoes.indexOf(mapaDimensoes.sexo) : -1,
+      gestacao: mapaDimensoes.gestacao ?
+ hDimensoes.indexOf(mapaDimensoes.gestacao) : -1,
       divisao: mapaDimensoes.divisao ? hDimensoes.indexOf(mapaDimensoes.divisao) : -1
     };
     if (idxDim.prontuario === -1) {
@@ -98,7 +100,8 @@ function buscarDadosParaPerfilDeUso() {
       
       // Adiciona campos dinâmicos (Sexo, Gestação, Divisão)
       if (idxDim.sexo !== -1) {
-        patient[mapaDimensoes.sexo] = String(row[idxDim.sexo] || "N/D").trim();
+        patient[mapaDimensoes.sexo] = String(row[idxDim.sexo] 
+ || "N/D").trim();
         colunasDinamicas[mapaDimensoes.sexo] = true;
       }
       if (idxDim.gestacao !== -1) {
@@ -108,6 +111,7 @@ function buscarDadosParaPerfilDeUso() {
       }
       if (idxDim.divisao !== -1) {
         patient[mapaDimensoes.divisao] = String(row[idxDim.divisao] || "N/D").trim();
+        
         colunasDinamicas[mapaDimensoes.divisao] = true;
       }
       
@@ -127,7 +131,8 @@ function buscarDadosParaPerfilDeUso() {
         
         const evento = {};
         const paciente = patientMap[prontuario];
-        
+      
+   
         // A. Adiciona *TODAS* as colunas da aba Fatos (a sua query)
         hFatos.forEach((nomeColuna, i) => {
           if (nomeColuna) { // Ignora colunas vazias
@@ -143,7 +148,6 @@ function buscarDadosParaPerfilDeUso() {
         dadosBrutosCoorte.push(evento);
       }
     });
-
     if (dadosBrutosCoorte.length === 0) {
       throw new Error(`Nenhum evento encontrado para a intervenção '${opcoes.medicamentoAlvo}' que também exista na aba '${mapaDimensoes.aba}'.`);
     }
@@ -158,7 +162,6 @@ function buscarDadosParaPerfilDeUso() {
       },
       rawData: dadosBrutosCoorte // Envia os dados "planos" e "juntos"
     };
-    
   } catch (e) {
     Logger.log("ERRO FATAL em buscarDadosParaPerfilDeUso: " + e.message + "\nStack: " + e.stack);
     dadosInjetados = {
@@ -168,4 +171,41 @@ function buscarDadosParaPerfilDeUso() {
   }
   
   return JSON.stringify(dadosInjetados);
+}
+
+
+/**
+ * =============================================================
+ * FUNÇÃO 3 (ATUALIZADA): Salva o "Bloco" completo no Gabinete
+ * (Chamada pelo PerfilDeUso.html)
+ * =============================================================
+ */
+function afixarGraficoAoGabinete(blocoGraficoString) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const CHAVE_ESTRUTURA = 'gabineteEstrutura'; // A mesma chave do Gabinete.gs
+    
+    // 1. Obter a lista de blocos existente
+    const estruturaSalvaString = props.getProperty(CHAVE_ESTRUTURA);
+    let estruturaSalva = [];
+    if (estruturaSalvaString) {
+      estruturaSalva = JSON.parse(estruturaSalvaString);
+    }
+
+    // 2. Adicionar o novo bloco (que já vem 100% formatado do frontend)
+    const novoBloco = JSON.parse(blocoGraficoString);
+    
+    // 3. Adicionar o novo bloco à lista
+    estruturaSalva.push(novoBloco);
+
+    // 4. Salvar a lista atualizada
+    props.setProperty(CHAVE_ESTRUTURA, JSON.stringify(estruturaSalva));
+    
+    Logger.log(`Bloco de Gráfico ${novoBloco.id} afixado com sucesso. Total no gabinete: ${estruturaSalva.length}`);
+    return "Gráfico afixado com sucesso!";
+
+  } catch (e) {
+    Logger.log("ERRO FATAL em afixarGraficoAoGabinete: " + e.message + "\nStack: " + e.stack);
+    throw new Error("Falha ao salvar o gráfico: " + e.message);
+  }
 }
